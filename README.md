@@ -86,6 +86,31 @@ without another model call. Reimporting the same capture/result is idempotent.
 Revised interpretations and identity reliability still require inspection;
 these keys do not prove arbitrary source identity semantics.
 
+## Small PydanticAI example
+
+`scripts/extract_example.py` calls PydanticAI directly on one complete native
+product, extracting title, SKU, price, currency and publication date. It uses the
+free `nvidia/nemotron-3-super-120b-a12b:free` route with reasoning enabled,
+independently of the full parser configuration:
+
+```bash
+PYDANTIC_AI_NO_BANNER=1 doppler run --project ai-automation --config dev -- \
+  .venv/bin/python scripts/extract_example.py
+```
+
+Each run keeps its output and complete SDK conversation in a new directory under
+`.runs/basic-product/`. Real calls returned typed output in about 7–8 seconds.
+The first call returned all five fields correctly. Repeats returned the text
+`"None"` for absent currency instead of JSON `null`, despite the nullable schema
+and explicit instruction. Those are extraction failures: a schema-valid string
+is not evidence of a stated currency. No correction or missing-value conversion
+hides that behavior in this example.
+
+A separate direct OpenAI SDK call to OpenRouter, without PydanticAI, returned
+`KEY_OK` in 3.97 seconds using that same free model and the existing Doppler key.
+This verifies authentication and a working completion route; it does not prove
+full ingestion. The full parser still has its separately committed configuration.
+
 ## Demonstration status
 
 The first replacement-runtime `small-a` run (two complete native captures,
