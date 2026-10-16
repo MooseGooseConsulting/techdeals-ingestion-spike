@@ -22,6 +22,12 @@ The project documents have separate responsibilities:
 Read them in that order. The proposed first delivery is one working path from
 varied real captures through interpretation and storage to information other
 agents can query, including dates and correct rescrape handling.
+It starts with [several different input shapes](docs/data-contract.md#different-input-shapes-through-the-same-path)
+together, including payloads containing many entries and several payloads
+describing one listing. The parser and database representation must be checked
+against that variety before implementation.
+The central proposal is one shared LLM-backed parser that also works on
+unfamiliar sources, supported by general format readers and database code.
 
 The intended destination is an improvement to the main TechDeals project after
 the behavior has been demonstrated. Organization ownership or a successful

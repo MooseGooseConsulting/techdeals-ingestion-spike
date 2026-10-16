@@ -23,7 +23,7 @@ requirement.
 
 | Problem | Where this plan addresses it | What must be demonstrated |
 |---|---|---|
-| [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–4; broader information extension | Different real purchase structures become useful query results without losing their context |
+| [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–4; broader information extension | Several structurally different inputs, including one-to-many and many-to-one cases, become useful query results through the same path |
 | [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–5 | Data retrieved by agents preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
 | [P3: price scope and cost apportionment](problems.md#p3-what-prices-cover-and-how-costs-are-apportioned) | First deliverable for stated purchase prices; cost apportionment extension for attributed costs | Amounts cover the correct purchases; justified allocations remain separately identified and traceable |
 | [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–5; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
@@ -31,16 +31,19 @@ requirement.
 | [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–5; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
 | [P7: developing categories](problems.md#p7-categories-that-develop-with-the-information) | Broader information and categories extension | New meaningful categories can be represented and queried with their relevant attributes and relationships |
 
-All seven problems remain open. The sequence below is proposed; the selection
-of examples and the size of the first slice have not been settled with the owner.
+All seven problems remain open. The sequence below is proposed. The initial
+structural cases are explicit in the data contract; the exact verified captures
+and stored record examples still need to be selected and inspected.
 
 ## Data behavior required in the first delivery
 
 Use the [data contract](data-contract.md) for scraped fields, record transformation,
 date meanings, parsing, identity, deduplication, and possible scraper changes.
-Support input from multiple collectors through their actual field mappings;
-Bright Data-specific metadata is not required of other scrapers. Keep original
-source identity separate from collection method, including for deduplication.
+Use one shared LLM-backed parser across collector outputs, with general format
+preparation and supplied source metadata. New sources should be usable without
+writing a parser or field mapping for each one. Bright Data-specific metadata
+is not required of other scrapers. Keep original source identity separate from
+collection method, including for deduplication.
 Its [rescrape cases](data-contract.md#listing-identity-and-repeated-scrapes) are
 part of the first working delivery. Select the open design choices there before
 finalizing the schema or collector output.
@@ -56,40 +59,74 @@ captured evidence, model request logs, and generated artifacts.
 Database development uses an isolated branch of an existing Neon project, as
 specified in the implementation steps below.
 
-## First deliverable: one useful, executable slice
+## First deliverable: a shared path across varied inputs
 
-1. **Choose varied real captures and inspect them.** Candidate structures include
-   a configured server, a standalone component or homogeneous lot, and a
-   multi-item sale posting. Choose examples for the problems they expose;
-   there is no fixed capture count. Use original payloads and source context, not a previous
-   parser's output or reference spreadsheet as the expected truth. Check that
-   they exercise different purchase structures. Record the exact source
-   excerpts needed to explain the expected answers alongside those examples.
-   Preserve missing dates and contradictions explicitly.
+The proposed executable boundary is batch ingestion of saved collector outputs
+into PostgreSQL, consumed through documented SQL tables/views. The initial
+delivery takes several different input shapes through the complete path
+together. Routine connections to running collectors follow the demonstrated
+import path.
 
-   Include different acquisition methods in the first delivery, including an
-   existing route independent of Bright Data. Confirm how each capture was
-   obtained, then identify its native fields and metadata; source diversity
-   alone does not establish collector diversity.
+The central hypothesis is that a good shared LLM parser can turn this varied
+content into useful records. The initial shapes below are evidence for testing
+that parser, not separate source-parser implementation projects. Generic input
+reading, validation, and database bookkeeping support it.
 
-   Done when each capture has a short, independently inspected description of
-   what is offered, its contents/counts, the stated amounts, and unknowns.
+1. **Assemble and inspect the initial inputs before designing the parser or
+   schema.** Cover each [initial structural case](data-contract.md#different-input-shapes-through-the-same-path):
+   a structured listing, products with multiple variants, repeated HTML entries,
+   a feed or post with multiple items, delimited or historical rows, and linked
+   responses that jointly describe one listing. Select a bounded set of captures
+   for those cases; there is no arbitrary fixed capture count and no requirement
+   to support every source/format combination. Include different hardware and
+   purchase structures within that set, such as a configured system, standalone
+   part or lot, and a multi-item post.
 
-2. **Define the information consuming agents need to retrieve.** Identify the
-   facts, relationships, quantities, purchase configurations, price scope, source
-   references, and unknowns the inspected captures require. Preserve distinctions
-   such as installed versus supported hardware, per-component versus aggregate
-   capacity, and a bundled component versus a separately purchasable item.
+   Use the [located source material](data-contract.md#existing-material-to-inspect-for-these-shapes)
+   as inspection leads. Record exact fixture paths, source and collection
+   provenance, and source excerpts beside the selected examples so a clean
+   checkout can use them. Check which files are original captures, authored
+   fixtures, or derived exports. Authored cases can expose a needed behavior;
+   they do not establish that a real source works. Find verified real examples
+   for the structural cases before claiming the initial coverage.
+
+   Include a confirmed collection route independent of Bright Data. Identify
+   native fields and metadata rather than inferring acquisition method from
+   source name or file format. Inspect item, prices and their scope, currency,
+   location, seller, condition, availability, specifications, and dates. Preserve
+   missing values and contradictions explicitly. Do not use a previous parser's
+   output or reference spreadsheet as expected truth.
+
+   Choose a finite development set and a separate, frozen set of held-back
+   sources before prompt and preparation development. Include structural
+   differences in both, so the initial design is not built around one layout.
+   Record expected items, prices, associations, dates, and explicit unknowns
+   independently of parser output. Label constructed edge cases separately
+   from real-source coverage.
+
+   Done when the initial set and its independently inspected meanings are
+   recorded, with the matrix covered and any missing real evidence visible.
+   An evidence gap remains work to resolve before calling the delivery working.
+
+2. **Describe stored results for all initial shapes together.** Write concrete
+   input-to-record examples before committing to a schema: which entries become
+   which records, which responses are associated, which price covers which
+   item/variant, and which source references and dates survive. Start with the
+   scraped facts that other agents need to retrieve. Include additional
+   attributes and unknowns rather than designing around one hardware family.
+   Preserve distinctions such as installed versus supported hardware,
+   per-component versus aggregate capacity, and a bundled component versus a
+   separately purchasable item.
    Define their meanings and how agents can retrieve and combine them for their
    own tasks. Link these requirements to the problems above.
 
-   Done when expected stored facts and relationships are explicit, including
-   unknowns and conflicts, and representative agent queries can establish whether
+   Done when each structural case has explicit expected records, including
+   unknowns and conflicts, and representative SQL reads can establish whether
    those meanings survive. Example queries demonstrate access; they do not limit
    the database to a fixed list of questions.
 
-3. **Choose the smallest representation and tools for that slice.** Sketch the
-   required records and relationships against the examples, then implement
+3. **Choose the smallest representation and tools for the varied inputs.** Check
+   the required records and relationships against all the examples, then implement
    them. Do not begin with the previous tables or recreate its module tree.
    Use PostgreSQL on an isolated branch of an existing Neon project. Python
    and Instructor are proposed starting tools for batched extraction; first
@@ -101,17 +138,28 @@ specified in the implementation steps below.
    Done when every stored field has a concrete purpose in agent consumption or in
    retaining their source evidence, and the chosen model request works in a batch.
 
-4. **Build and run the complete path.** A documented ingestion entry point takes
-   the selected captures, interprets entries or fields needing contextual
-   interpretation in batched free-model requests, and stores the evidence and
-   interpreted information in the database queried by other agents. Preserve
-   usable structured source information with its provenance. Document the
+4. **Build and run the complete path.** A documented batch ingestion entry point
+   preserves the selected saved captures and prepares them with general format
+   readers. Supply their source references, shared context, and known collection
+   metadata to the shared parser. Use batched free-model requests to identify
+   items and their information across layouts, retaining explicit structured
+   values and returning a common record structure with evidence references.
+   Validate the returned information and store it with the source evidence in
+   the database queried by other agents. Preserve usable structured source
+   information with its provenance. Document the
    tables/views, field meanings, units, relationships, time semantics, and unknown
    states needed by a consuming agent. The path must work from a clean checkout
-   with documented setup. Keep the batch result associated with
-   its input even when outputs arrive out of order. Preserve explicit failures
+   with documented setup. Exercise all initial shapes in the same run, including
+   multiple records from one payload and one listing supported by multiple
+   payloads. Keep the batch result associated with its input even when outputs
+   arrive out of order. Preserve explicit failures
    and usable partial information. Evidence with an unknown original fetch time
    must remain retrievable without inventing a dated price or stock observation.
+   Retain unmapped or failed entries with an explicit disposition. A new shape
+   must not silently lose records or require guesses to fit the representation.
+   Use ordinary code for database identity, deduplication, time handling, and
+   deterministic calculations. Investigate source-specific code only when the
+   shared approach has a demonstrated limitation.
 
    Done when ingestion runs against the scratch database and actual agent query
    results match the inspected source meaning, including the excluded matches,
@@ -125,10 +173,21 @@ specified in the implementation steps below.
    preserve that behavior. Keep inputs and model results inspectable; credentials
    never belong in artifacts.
 
+   Run the frozen held-back set through the same path and compare database
+   results against its inspected expected records. Count omitted items and
+   prices, wrong associations, invented values, and lost dates as failures,
+   even when returned records look plausible. If required behavior fails, report
+   that limitation and the specific correction or revised experiment needed;
+   the shared-parser hypothesis remains undemonstrated for that behavior.
+   Tuning against a failed held-back example makes it development material.
+   Any later claim about unfamiliar sources requires a new, finite held-back
+   set; continually replacing failed examples is not a completion rule.
+
    Done when the bounded information is usable by a consuming agent from the
-   database and its documented meanings, without relying on the ingestion
-   agent's chat explanations. Passing checks alone does not complete this step
-   or establish wider coverage.
+   database and its documented meanings across every initial structural case,
+   without relying on the ingestion agent's chat explanations, and the frozen
+   held-back run demonstrates its required behavior. Passing checks alone does
+   not complete this step or establish wider coverage.
 
 ## Expand the same working path
 
@@ -140,8 +199,13 @@ each extension small enough to demonstrate through the same agent query path.
    interrupted batches, and configuration changes. Preserve past interpretations
    and source history without duplicating listings or moving prices to different
    items. Include known unavailable and unknown-availability cases.
-2. **Broader information and categories.** Add genuinely different source and
-   hardware shapes, configuration choices, units, currencies, and price kinds.
+2. **Broader information and categories.** Extend coverage beyond the initial
+   structural cases with new source and hardware shapes, configuration choices,
+   units, currencies, and price kinds. For each new shape, inspect the input,
+   describe its expected stored records, and first run it through the same
+   parser. Improve general preparation or interpretation where needed; add a
+   source-specific rule only for an evidenced limitation. Revisit shared
+   semantics when the evidence requires it.
    Show that a new meaningful category can be represented and queried without
    reproducing a fixed legacy taxonomy. Verify comparable configurations and
    deliberate near matches with source evidence.
@@ -152,9 +216,9 @@ each extension small enough to demonstrate through the same agent query path.
    seller's component ask or a separately purchasable offer. Decide the method
    from a real buying question; no arbitrary division or component valuation
    machinery is assumed.
-4. **Routine intake.** Connect an existing scraper's retained capture output to
-   the demonstrated path, then extend the source mappings across the other
-   collectors. Preserve source identity and time semantics across collection methods.
+4. **Routine intake.** Connect existing scrapers' retained capture outputs to
+   the demonstrated shared path. Preserve source identity and time semantics
+   across collection methods.
    Address actual acquisition gaps only after confirming what the existing
    collectors provide. Legacy corpus migration comes after the new path works.
 
