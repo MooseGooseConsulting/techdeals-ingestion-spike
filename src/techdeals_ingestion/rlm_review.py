@@ -88,8 +88,7 @@ def render_review(directory: str | Path) -> Path:
     history = json.loads((directory / "model-history.json").read_text(encoding="utf-8"))
     trajectory_path = directory / "trajectory.json"
     trajectory = (
-        json.loads(trajectory_path.read_text(encoding="utf-8"))
-        if trajectory_path.exists() else []
+        json.loads(trajectory_path.read_text(encoding="utf-8")) if trajectory_path.exists() else []
     )
     result_path = directory / "result.json"
     result = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else None
@@ -114,7 +113,8 @@ def render_review(directory: str | Path) -> Path:
         )
     sections.append("<h2>Extraction output</h2>")
     sections.append(_section("Result", result or {"message": "No result returned"}))
-    page = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+    page = (
+        """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>TechDeals RLM review</title><style>
 :root{font-family:system-ui,sans-serif;color-scheme:dark}
 body{max-width:1120px;margin:2rem auto;padding:0 1rem;background:#111827;color:#e5e7eb}
@@ -124,7 +124,10 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;margin:0;border-top
 small{color:#9ca3af}a{color:#93c5fd}details:not([open]){background:#172033}
 </style></head><body><h1>TechDeals · RLM execution review</h1>
 <small>Static, offline review. Raw prompts, model responses and generated code are local to this run.</small>
-""" + "\n".join(sections) + "</body></html>\n"
+"""
+        + "\n".join(sections)
+        + "</body></html>\n"
+    )
     output = directory / "review.html"
     output.write_text(page, encoding="utf-8")
     return output
