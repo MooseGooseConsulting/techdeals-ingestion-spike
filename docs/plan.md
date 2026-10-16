@@ -3,31 +3,31 @@
 Status: initial proposal, 2026-10-16. No implementation or database has been
 created for this spike.
 
-## Goal and basis
+## Problems and required outcomes
 
-Make heterogeneous hardware information useful for sorting, querying, and
-tallying. A listing may describe a single part, several independent items, a
-configured system, a lot, or selectable options. The result must preserve what
-is included, what can actually be bought, what each amount covers, where the
-information came from, and its history.
+Read [Problems this project must solve](problems.md) first. It states the
+problems and required behavior in their own terms. This document proposes the
+implementation approach; completing a step does not by itself solve a problem.
 
-The owner requested a new organization repository, a clearly written plan, and
-a fresh implementation without mentally inheriting the previous system. They
-explicitly rejected carrying scoring and its surrounding machinery into this
-spike. This document is an agent-written plan based on those instructions and
-the requirements discussed with the owner; it is not an original transcript.
+| Problem | Where this plan addresses it | What must be demonstrated |
+|---|---|---|
+| [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–4; broader information extension | Different real purchase structures become useful query results without losing their context |
+| [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–5 | The returned answer preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
+| [P3: price scope and cost apportionment](problems.md#p3-what-prices-cover-and-how-costs-are-apportioned) | First deliverable for stated purchase prices; cost apportionment extension for attributed costs | Amounts cover the correct purchases; justified allocations remain separately identified and traceable |
+| [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–5; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
+| [P5: source evidence, dates, and history](problems.md#p5-source-evidence-dates-and-history) | First deliverable for source traceability; continuity extension for repeated captures and interpretation changes | Answers retain source/time context and history without invented events, duplicated purchases, or moved prices |
+| [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–5; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
+| [P7: developing categories](problems.md#p7-categories-that-develop-with-the-information) | Broader information and categories extension | New meaningful categories can be represented and queried with their relevant attributes and relationships |
 
-The earlier requirements still matter: batched model calls; varied hardware and
-source shapes; component breakdown and justified cost apportionment; dynamic
-categories; source and time provenance; preserving price/availability history;
-existing scrapers remain in place; legacy migration waits; protect the cluster.
-The later model policy is free models only.
+All seven problems remain open. The sequence below is proposed; the selection
+of examples and the size of the first slice have not been settled with the owner.
 
 ## First deliverable: one useful, executable slice
 
-1. **Choose three real captures and inspect them.** Start with a configured
-   server, a standalone component or homogeneous lot, and a multi-item sale
-   posting. Use the original payloads and source context, not a previous
+1. **Choose varied real captures and inspect them.** Candidate structures include
+   a configured server, a standalone component or homogeneous lot, and a
+   multi-item sale posting. Choose examples for the problems they expose;
+   there is no fixed capture count. Use original payloads and source context, not a previous
    parser's output or reference spreadsheet as the expected truth. Check that
    they exercise different purchase structures. Record the exact source
    excerpts needed to explain the expected answers alongside those examples.
@@ -41,8 +41,10 @@ The later model policy is free models only.
    post can be purchased separately and at what stated prices; and which
    captured purchase satisfies a named component requirement, with its purchase
    quantity and total commitment. A component inside a server may be relevant
-   evidence without being a separately buyable offer. Return source evidence
-   with the answer. Write down near matches that must be excluded.
+   evidence without being a separately buyable offer. Include relevant distinctions
+   such as per-component versus aggregate capacity and installed versus supported
+   hardware. Return source evidence with the answer. Write down near matches
+   that must be excluded and link each question to the problems above.
 
    Done when the expected query outputs are concrete enough to compare directly
    with the implementation, including the unknown or unresolved cases.
@@ -127,7 +129,7 @@ wholesale, and finishing the spike does not require polishing every prototype.
 
 ## Keep the work bounded
 
-The initial repository contains this plan, a short README, and agent instructions.
+Keep the problem statement and implementation plan aligned as decisions develop.
 Add source, examples, dependencies, and focused checks as the working slice needs
 them. Scoring systems, confidence numbers, rankings, generic evaluation tooling,
 bulk legacy imports, new collectors, and production deployment are outside the
