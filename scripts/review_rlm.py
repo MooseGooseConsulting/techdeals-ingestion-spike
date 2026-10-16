@@ -69,6 +69,7 @@ def main() -> int:
 
     # Optional dependency. An offline 'review' does not need DSPy installed.
     import dspy
+
     from techdeals_ingestion.models import Extraction
     from techdeals_ingestion.parser import _validate_output
     from techdeals_ingestion.sources import load_manifest
