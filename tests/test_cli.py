@@ -67,3 +67,70 @@ def test_fingerprint_changes_with_shared_instructions(monkeypatch):
 
     monkeypatch.setattr(cli.Path, "read_bytes", changed)
     assert cli.parser_fingerprint(settings, "staged") != original
+
+
+def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
+    import os
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from techdeals_ingestion.contracts import (
+        EvidenceRef,
+        Offer,
+        ParseBatchResult,
+        Price,
+        UnitResult,
+    )
+    from techdeals_ingestion.evidence import EvidenceIndex
+    from techdeals_ingestion.storage import Store
+
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL not supplied; requires an explicit isolated database")
+    store = Store(dsn)
+    store.migrate()
+    experiment = uuid4().hex
+    for number in (1, 2):
+        cid = experiment + str(number)
+        source = tmp_path / cid
+        source.write_text(f"Item {number}")
+        capture = CaptureInput(
+            capture_id=cid,
+            acquisition_key=cid,
+            path=source,
+            media_type="text/plain",
+            linked_group="same-unit",
+        )
+        package = WorkPackage(package_id=cid, captures=[capture])
+        ref = EvidenceRef(capture_id=cid, locator="$")
+        result = ParseBatchResult(
+            batch_id=cid,
+            units=[
+                UnitResult(
+                    unit_id="same-unit",
+                    input_refs=[ref],
+                    status="complete",
+                    offers=[
+                        Offer(
+                            local_id="offer",
+                            title=f"Item {number}",
+                            evidence=[ref],
+                            prices=[
+                                Price(
+                                    local_id="price",
+                                    amount=Decimal(number),
+                                    kind="ask",
+                                    scope_refs=["offer"],
+                                    evidence=[ref],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+        store.publish(package, result, EvidenceIndex([capture]), experiment, "test", cid)
+    assert len(store.query("listing_sightings", experiment_id=experiment, arm="test")) == 2
+    rows, prices = cli.trial_rows(store, experiment + "2", experiment, "test")
+    assert [row["title"] for row in rows] == ["Item 2"]
+    assert [price["amount"] for price in prices] == [Decimal(2)]

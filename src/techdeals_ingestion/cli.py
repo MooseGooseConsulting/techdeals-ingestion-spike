@@ -32,6 +32,21 @@ def _store(direct=False):
     return Store(dsn)
 
 
+def trial_rows(store, attempt, experiment, arm):
+    """Read accepted rows from this exact attempt, excluding older same-unit sightings."""
+    with store.connect() as connection:
+        rows = connection.execute(
+            """SELECT s.* FROM listing_sightings s JOIN interpretations i USING(result_id)
+            WHERE i.attempt_key=%s AND i.experiment_id=%s AND i.arm=%s""",
+            (attempt, experiment, arm),
+        ).fetchall()
+        prices = connection.execute(
+            "SELECT * FROM prices WHERE result_id=ANY(%s)",
+            ([row["result_id"] for row in rows],),
+        ).fetchall()
+    return rows, prices
+
+
 def parser_fingerprint(settings, arm, direct=False):
     folder = Path(__file__).parent
     names = [
@@ -41,6 +56,7 @@ def parser_fingerprint(settings, arm, direct=False):
         "provider.py",
         "settings.py",
         "instructions.py",
+        "extraction.py",
         "cli.py",
         "staged.py" if arm == "staged" else "tool_parser.py",
     ]
@@ -106,38 +122,9 @@ async def run_package(args):
             async with LLMRun(settings, destination / "trace") as session:
                 try:
                     if getattr(args, "direct", False):
-                        from .instructions import SEMANTIC_INSTRUCTIONS
+                        from .extraction import parse_direct
 
-                        units = prepare_units(package)
-                        prompt = json.dumps(
-                            {
-                                "batch_id": package.package_id,
-                                "units": [
-                                    {
-                                        "unit_id": unit.unit_id,
-                                        "input_refs": [r.model_dump() for r in unit.input_refs],
-                                        "captures": [
-                                            {
-                                                "capture_id": ref.capture_id,
-                                                "collection_context": index.captures[
-                                                    ref.capture_id
-                                                ].model_dump(mode="json", exclude={"path"}),
-                                                "native": index.resolve(ref),
-                                            }
-                                            for ref in unit.input_refs
-                                        ],
-                                    }
-                                    for unit in units
-                                ],
-                            },
-                            ensure_ascii=False,
-                        )
-                        if len(prompt.encode()) > settings.max_prepared_bytes:
-                            raise ValueError("Direct batch exceeds the prepared input allowance")
-                        response = await session.run(
-                            session.build_agent(ParseBatchResult, SEMANTIC_INSTRUCTIONS), prompt
-                        )
-                        result = response.output
+                        result = await parse_direct(package, index, session)
                     else:
                         result = await parse_batch(package, index, session)
                 finally:
@@ -158,18 +145,8 @@ async def run_package(args):
             for u in result.units
         ]
         (destination / "result.json").write_text(result.model_dump_json(indent=2) + "\n")
-        unit_ids = {u.unit_id for u in result.units}
-        rows = [
-            r
-            for r in store.query("listing_sightings", experiment_id=args.experiment, arm=args.arm)
-            if r["unit_id"] in unit_ids
-        ]
+        rows, price_rows = trial_rows(store, attempt, args.experiment, args.arm)
         (destination / "database-rows.json").write_text(_json(rows))
-        with store.connect() as connection:
-            price_rows = connection.execute(
-                "SELECT * FROM prices WHERE result_id=ANY(%s)",
-                ([r["result_id"] for r in rows],),
-            ).fetchall()
         (destination / "database-prices.json").write_text(_json(price_rows))
         current = store.query("current_listings", experiment_id=args.experiment, arm=args.arm)
         (destination / "database-current.json").write_text(_json(current))
