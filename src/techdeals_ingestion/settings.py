@@ -1,4 +1,4 @@
-"""Committed parser settings; credentials are supplied only by the process environment."""
+"""Small, explicit settings for the single extraction agent."""
 
 import hashlib
 import tomllib
@@ -13,24 +13,28 @@ class ParserSettings(BaseModel):
     base_url: str
     model: str
     reasoning_enabled: bool = True
-    batch_size: int = Field(gt=0)
-    max_prepared_bytes: int = Field(gt=0)
-    max_package_bytes: int = Field(gt=0)
-    max_exposure_bytes: int = Field(default=512 * 1024, gt=0)
-    tool_page_bytes: int = Field(gt=0)
-    max_requests: int = Field(gt=0)
-    max_tool_calls: int = Field(gt=0)
-    context_window_tokens: int = Field(default=1000000, gt=0)
+    max_input_bytes: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     timeout_seconds: int = Field(gt=0)
-    package_timeout_seconds: int = Field(gt=0)
-    correction_retries: int = Field(ge=0)
+    correction_retries: int = Field(ge=0, le=1)
 
     @classmethod
     def load(cls, path: str | Path = "config/parser.toml") -> "ParserSettings":
         with Path(path).open("rb") as source:
             return cls.model_validate(tomllib.load(source))
 
-    @property
-    def config_id(self) -> str:
-        return hashlib.sha256(self.model_dump_json().encode()).hexdigest()
+
+def fingerprint(settings: ParserSettings) -> str:
+    """Fingerprint settings and the small set of code that defines their meaning."""
+    package_dir = Path(__file__).resolve().parent
+    repository = package_dir.parents[1]
+    digest = hashlib.sha256(settings.model_dump_json().encode())
+    for path in (
+        package_dir / "parser.py",
+        package_dir / "models.py",
+        package_dir / "settings.py",
+        repository / "uv.lock",
+    ):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()

@@ -1,220 +1,164 @@
-"""Integration boundaries: failed preparation still retains source evidence."""
-
 import json
 from types import SimpleNamespace
 
-import pytest
-
 from techdeals_ingestion import cli
-from techdeals_ingestion.contracts import CaptureInput, WorkPackage
+from techdeals_ingestion import parser as parser_module
+from techdeals_ingestion.models import Entry, Extraction, Price, SourceRef
 
 
-async def test_bad_native_syntax_retained_and_failure_recorded(tmp_path, monkeypatch):
-    source = tmp_path / "broken.json"
-    source.write_bytes(b'{"unfinished":')
-    package = WorkPackage(
-        package_id="broken",
-        captures=[
-            CaptureInput(
-                capture_id="raw",
-                acquisition_key="acquisition",
-                path=source,
-                media_type="application/json",
-            )
-        ],
-    )
-    calls = []
-
-    class FakeStore:
-        def retain_package(self, value):
-            calls.append(("retained", value.captures[0].path.read_bytes()))
-
-        def record_failure(self, value, experiment, arm, attempt, reason):
-            calls.append(("failed", reason))
-            return {"published_units": 0, "errors": [reason]}
-
-    monkeypatch.setattr(cli, "_store", lambda: FakeStore())
-    monkeypatch.setattr(cli, "load_work_packages", lambda _: [package])
-    monkeypatch.setattr(cli, "LLMRun", lambda *a, **k: pytest.fail("No LLM on invalid preparation"))
-    args = SimpleNamespace(
-        manifest="unused",
-        config="config/parser.toml",
-        package="broken",
-        arm="staged",
-        experiment="test",
-        output=str(tmp_path / "trial"),
-        fresh=True,
-        attempt="failed-preparation",
-    )
-    assert await cli.run_package(args) == 1
-    assert calls[0] == ("retained", source.read_bytes())
-    assert calls[1][0] == "failed"
-    summary = json.loads((tmp_path / "trial/summary.json").read_text())
-    assert summary["exception_type"] == "JSONDecodeError"
-    with pytest.raises(ValueError, match="new output directory"):
-        await cli.run_package(args)
+def args_for(path, output, **extra):
+    defaults = {
+        "input": [str(path)],
+        "package": None,
+        "manifest": "unused",
+        "namespace": "shop",
+        "url": "https://example.test/item",
+        "retrieved_at": None,
+        "acquisition_key": None,
+        "metadata": {},
+        "config": "unused",
+        "output": str(output),
+        "fresh": True,
+    }
+    defaults.update(extra)
+    return SimpleNamespace(**defaults)
 
 
-def test_fingerprint_changes_with_shared_instructions(monkeypatch):
-    from techdeals_ingestion.settings import ParserSettings
+async def test_ingest_retains_then_parses_once_and_writes_attempt_snapshots(tmp_path, monkeypatch):
+    path = tmp_path / "item.json"
+    path.write_bytes(b'{"title":"Disk","price":"120"}')
+    output = tmp_path / "run"
+    events = []
 
-    settings = ParserSettings.load()
-    original = cli.parser_fingerprint(settings, "staged")
-    read = cli.Path.read_bytes
+    class Settings:
+        def model_dump(self, **kwargs):
+            return {"model": "test-model"}
 
-    def changed(path):
-        return read(path) + (b"different semantics" if path.name == "instructions.py" else b"")
+    class Store:
+        def retain(self, sources):
+            events.append(("retain", sources[0].content))
 
-    monkeypatch.setattr(cli.Path, "read_bytes", changed)
-    assert cli.parser_fingerprint(settings, "staged") != original
+        def cached(self, sources, key):
+            events.append(("cached", key))
 
+        def save(self, sources, result, key, **kwargs):
+            events.append(("save", result is not None, kwargs))
+            return {
+                "attempt_id": "attempt-1",
+                "saved_entries": len(result.entries) if result else 0,
+            }
 
-def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
-    import os
-    from decimal import Decimal
-    from uuid import uuid4
+        def query(self, view, **filters):
+            events.append(("query", view, filters))
+            return [{"view": view}]
 
-    from techdeals_ingestion.contracts import (
-        EvidenceRef,
-        Offer,
-        ParseBatchResult,
-        Price,
-        UnitResult,
-    )
-    from techdeals_ingestion.evidence import EvidenceIndex
-    from techdeals_ingestion.storage import Store
+    result = None
 
-    dsn = os.environ.get("TEST_DATABASE_URL")
-    if not dsn:
-        pytest.skip("TEST_DATABASE_URL not supplied; requires an explicit isolated database")
-    store = Store(dsn)
-    store.migrate()
-    experiment = uuid4().hex
-    for number in (1, 2, 3):
-        cid = experiment + str(number)
-        source = tmp_path / cid
-        source.write_text(f"Item {number}")
-        capture = CaptureInput(
-            capture_id=cid,
-            acquisition_key=cid,
-            path=source,
-            media_type="text/plain",
-            linked_group="same-unit",
-        )
-        package = WorkPackage(package_id=cid, captures=[capture])
-        ref = EvidenceRef(capture_id=cid, locator="$")
-        result = ParseBatchResult(
-            batch_id=cid,
-            units=[
-                UnitResult(
-                    unit_id="same-unit",
-                    input_refs=[ref],
-                    status="no_offer" if number == 3 else "complete",
-                    issues=["No offer present"] if number == 3 else [],
-                    offers=[]
-                    if number == 3
-                    else [
-                        Offer(
-                            local_id="offer",
-                            title=f"Item {number}",
-                            evidence=[ref],
-                            prices=[
-                                Price(
-                                    local_id="price",
-                                    amount=Decimal(number),
-                                    kind="ask",
-                                    scope_refs=["offer"],
-                                    evidence=[ref],
-                                )
-                            ],
-                        )
-                    ],
+    async def parse(sources, settings, trace_dir):
+        nonlocal result
+        events.append(("parse", sources[0].content, trace_dir.exists()))
+        assert events[0] == ("retain", path.read_bytes())
+        result = Extraction(
+            entries=[
+                Entry(
+                    source_refs=[SourceRef(input_id=sources[0].input_id)],
+                    title="Disk",
+                    prices=[Price(amount="120", currency="USD", original="$120", kind="ask")],
                 )
-            ],
+            ]
         )
-        store.publish(package, result, EvidenceIndex([capture]), experiment, "test", cid)
-    assert len(store.query("listing_sightings", experiment_id=experiment, arm="test")) == 2
-    rows, prices, outcomes = cli.trial_rows(store, experiment + "2", experiment, "test")
-    assert [row["title"] for row in rows] == ["Item 2"]
-    assert [price["amount"] for price in prices] == [Decimal(2)]
-    assert len(outcomes) == 1 and outcomes[0]["status"] == "complete"
-    rows, prices, outcomes = cli.trial_rows(store, experiment + "3", experiment, "test")
-    assert rows == prices == []
-    assert len(outcomes) == 1
-    assert outcomes[0]["status"] == "no_offer"
-    assert outcomes[0]["unit_payload"] == result.units[0].model_dump(mode="json")
-    from techdeals_ingestion.evaluate import evaluate_persisted
-
-    report = evaluate_persisted(result, rows, prices, outcomes=outcomes)
-    unit_check = report["checks"][-1]
-    assert unit_check["status"] == "pass"
-    assert unit_check["source"] == "ingestion_outcomes.unit_payload"
-
-
-async def test_published_partial_unit_is_reported_as_incomplete(tmp_path, monkeypatch):
-    from contextlib import asynccontextmanager, nullcontext
-
-    from techdeals_ingestion import extraction
-    from techdeals_ingestion.contracts import EvidenceRef, Offer, ParseBatchResult, UnitResult
-
-    source = tmp_path / "source"
-    source.write_text("Item, price unavailable")
-    package = WorkPackage(
-        package_id="p",
-        captures=[
-            CaptureInput(
-                capture_id="item",
-                acquisition_key="item",
-                path=source,
-                media_type="text/plain",
-            )
-        ],
-    )
-    ref = EvidenceRef(capture_id="item", locator="$")
-    result = ParseBatchResult(
-        batch_id="p",
-        units=[
-            UnitResult(
-                unit_id="item",
-                input_refs=[ref],
-                status="partial",
-                issues=["Price unavailable"],
-                offers=[Offer(local_id="offer", title="Item", evidence=[ref])],
-            )
-        ],
-    )
-
-    async def parse(*args):
         return result
 
-    @asynccontextmanager
-    async def session(*args):
-        yield SimpleNamespace(stats=dict)
+    monkeypatch.setattr(parser_module, "fingerprint", lambda settings: "parser-key")
+    monkeypatch.setattr(parser_module, "parse", parse)
+    monkeypatch.setattr(cli, "_store", lambda: Store())
+    monkeypatch.setattr(cli.ParserSettings, "load", lambda path: Settings())
 
-    connection = SimpleNamespace(execute=lambda *a: SimpleNamespace(fetchall=list))
-    store = SimpleNamespace(
-        retain_package=lambda p: None,
-        publish=lambda *a, **kw: {"published_units": 1, "errors": []},
-        connect=lambda: nullcontext(connection),
-        query=lambda *a, **kw: [],
-    )
-    monkeypatch.setattr(cli, "_store", lambda: store)
-    monkeypatch.setattr(cli, "load_work_packages", lambda p: [package])
-    monkeypatch.setattr(cli, "LLMRun", session)
-    monkeypatch.setattr(extraction, "parse_direct", parse)
-    args = SimpleNamespace(
-        manifest="unused",
-        config="config/parser.toml",
-        package="p",
-        arm="staged",
-        experiment="partial",
-        output=str(tmp_path / "trial"),
-        fresh=True,
-        direct=True,
-        attempt="partial-attempt",
-    )
-    assert await cli.run_package(args) == 1
-    summary = json.loads((tmp_path / "trial/summary.json").read_text())
-    assert summary["publication"] == {"published_units": 1, "errors": []}
-    assert summary["status"] == "completed_with_failures"
-    assert json.loads((tmp_path / "trial/database-outcomes.json").read_text()) == []
+    assert await cli._ingest(args_for(path, output)) == 0
+    assert [event[0] for event in events] == ["retain", "parse", "save", "query", "query"]
+    assert events[1] == ("parse", path.read_bytes(), True)
+    assert json.loads((output / "result.json").read_text())["entries"][0]["title"] == "Disk"
+    report = json.loads((output / "report.json").read_text())
+    assert report["attempt_id"] == "attempt-1"
+    assert report["status"] == "completed"
+    assert json.loads((output / "database-entries.json").read_text()) == [{"view": "entries"}]
+    assert (output / "trace").is_dir()
+
+
+async def test_zero_entries_without_a_source_issue_is_incomplete(tmp_path, monkeypatch):
+    path = tmp_path / "empty.txt"
+    path.write_text("nothing recognizable")
+    output = tmp_path / "run"
+
+    class Settings:
+        def model_dump(self, **kwargs):
+            return {}
+
+    class Store:
+        def retain(self, sources):
+            pass
+
+        def cached(self, sources, key):
+            return None
+
+        def save(self, sources, result, key, **kwargs):
+            return {"attempt_id": "attempt-2"}
+
+        def query(self, view, **filters):
+            return []
+
+    monkeypatch.setattr(parser_module, "fingerprint", lambda settings: "key")
+
+    async def parse(*args, **kwargs):
+        return Extraction()
+
+    monkeypatch.setattr(parser_module, "parse", parse)
+    monkeypatch.setattr(cli, "_store", lambda: Store())
+    monkeypatch.setattr(cli.ParserSettings, "load", lambda path: Settings())
+    assert await cli._ingest(args_for(path, output)) == 1
+    report = json.loads((output / "report.json").read_text())
+    assert report["status"] == "completed_with_issues"
+
+
+async def test_provider_exception_text_is_never_saved_or_reported(tmp_path, monkeypatch):
+    path = tmp_path / "item.txt"
+    path.write_text("native item")
+    output = tmp_path / "run"
+    persisted_errors = []
+
+    class Settings:
+        def model_dump(self, **kwargs):
+            return {}
+
+    class ProviderFailure(Exception):
+        status_code = 502
+
+    class Store:
+        def retain(self, sources):
+            pass
+
+        def cached(self, sources, key):
+            return None
+
+        def save(self, sources, result, key, **kwargs):
+            persisted_errors.append(kwargs.get("error"))
+            return {"attempt_id": "failed-attempt", "saved_entries": 0}
+
+        def query(self, view, **filters):
+            raise AssertionError("failed extraction must not query entries")
+
+    monkeypatch.setattr(parser_module, "fingerprint", lambda settings: "key")
+
+    async def parse(*args):
+        raise ProviderFailure("provider body contains TOP_SECRET_KEY")
+
+    monkeypatch.setattr(parser_module, "parse", parse)
+    monkeypatch.setattr(cli, "_store", lambda: Store())
+    monkeypatch.setattr(cli.ParserSettings, "load", lambda path: Settings())
+
+    assert await cli._ingest(args_for(path, output)) == 1
+    assert "TOP_SECRET_KEY" not in persisted_errors[0]
+    report_text = (output / "report.json").read_text()
+    assert "TOP_SECRET_KEY" not in report_text
+    report = json.loads(report_text)
+    assert report["error"] == {"type": "ProviderFailure", "status_code": 502}

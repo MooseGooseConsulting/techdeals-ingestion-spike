@@ -4,128 +4,104 @@ Turn heterogeneous hardware listings into a database that other agents can
 query and tally for their analysis. Preserve the source, scraped item
 and price facts, source-stated associations, and changes over time.
 
-The immediate design is a shared LLM extraction path: native input -> entries
-with named fields and nested prices -> validated PostgreSQL records. The current
-executable still contains an overbuilt graph-extraction prototype and has not
-passed source-to-SQL acceptance. Read the design correction before extending it.
+The runtime has one path: **native sources → one PydanticAI extraction agent →
+entries with named fields and nested prices → Neon PostgreSQL → SQL reads**.
+The former graph contract, two parser strategies, discovery loop and experiment
+framework have been removed. The corpus and its provenance stay.
 
 | Document | Purpose |
 |---|---|
-| [Design correction](docs/design.md) | What to build, what the model returns, and what the application owns |
-| [Problems and required outcomes](docs/problems.md) | The broader outcomes and limits of the initial exercise |
-| [Data contract](docs/data-contract.md) | Evidence, output meanings, identity, dates, immutable interpretations, acceptance, history, and SQL consumption |
-| [Implementation plan](docs/plan.md) | Implementation sequence and source-to-SQL acceptance |
+| [Design](docs/design.md) | Entry interface and application responsibilities |
+| [Problems](docs/problems.md) | Required outcomes and real-source gaps |
+| [Data contract](docs/data-contract.md) | Source preservation, dates, identity, repeat scrapes and SQL meanings |
+| [Plan](docs/plan.md) | Implementation sequence and acceptance demonstrations |
 
-Read the design and plan first; the other documents retain source and history
-requirements. The design accepts unfamiliar sources through generic
-JSON/HTML/XML/CSV/text readers, without a handwritten semantic parser for each
-site. Each new or changed entry needing interpretation still needs the model to
-read relevant evidence. Compatible unchanged content may reuse an accepted
-interpretation while preserving a later observation. Unknown dates and identity
-remain explicit.
+The stack is Python 3.12, PydanticAI, Pydantic, psycopg, PostgreSQL, uv, pytest
+and Ruff. Beautiful Soup checks optional HTML locators. The committed model is
+`nvidia/nemotron-3.5-lightning:free` through OpenRouter, with reasoning enabled,
+at most one correction, and no alternative-model fallback. Model selection is
+in `config/parser.toml`. Credentials enter through Doppler-injected process
+environment; the application does not load `.env` files.
 
-The existing prototype uses Python 3.12, PydanticAI `slim[openrouter]`, typed
-Pydantic output, Beautiful Soup generic readers, `psycopg`, `uv`, `pytest`, and
-`ruff`. The commands below describe that prototype, pending the contract
-replacement in the plan. The committed
-model is `nvidia/nemotron-3.5-lightning:free` through
-`https://openrouter.ai/api/v1`, with no alternative-model fallback. The exact
-model must pass the structured multi-input and tools-plus-final capability
-probes before compatibility is claimed. Reasoning is explicitly enabled. The free
-Lightning route uses typed output tools, not native JSON-schema response mode. Supply secrets through Doppler-injected
-process environment; the application does not load `.env` files.
-
-Database work targets existing Neon project `late-wave-13685431`, a new child
-branch `dev/ingestion-exercise` of main `br-restless-smoke-b4qofs8r`, and fresh
-database `ingestion_spike`. Existing production schema is not the spike's
-authority. No production changes are authorized by this exercise.
-
-The initial full development attempts failed before producing usable rows. The
-current first gate is deliberately smaller: **two complete native records,
-11,584 bytes total, sent together in one extraction request**, followed by field
-inspection and actual Neon reads. Discovery and tool loops are bypassed for this
-gate. The parser names the common extraction fields in its Pydantic schema and
-uses framework-managed output corrections in the same conversation. Live SQL
-checks established the tested persistence behavior. Model attempts have either
-failed price-scope validation or failed at the provider before output; zero useful
-records have passed source inspection. The implementation remains in progress.
-
-From a clean checkout, run `uv sync --locked`. Inspect evidence without credentials:
+## Run it
 
 ```bash
+uv sync --locked
 uv run techdeals-ingest inspect --package small-a
 uv run pytest -q
-```
-
-The normal test suite uses no model credentials. Live SQL checks require an explicit
-`TEST_DATABASE_URL`; source regeneration requires the original pinned checkouts and
-archive. Their skipped status is reported when those inputs are absent.
-
-For the configured exercise target, the helper obtains the OpenRouter key and
-Neon credentials from the existing Doppler projects and injects them into the child
-process. It checks the branch-specific host/database and never writes credentials:
-
-```bash
 python scripts/with_doppler.py uv run techdeals-ingest migrate
-python scripts/with_doppler.py uv run techdeals-ingest probe
-python scripts/with_doppler.py uv run techdeals-ingest run \
-  --package small-a --arm staged --direct --experiment my-small-proof \
-  --output .runs/my-small-proof --fresh
+python scripts/with_doppler.py uv run techdeals-ingest ingest \
+  --package small-a --output .runs/my-small-proof --fresh
+python scripts/with_doppler.py uv run techdeals-ingest query prices
 ```
 
-The application itself reads `OPENROUTER_API_KEY`, `DATABASE_URL`, and
-`DATABASE_URL_UNPOOLED` from its process environment. The helper's two Doppler
-projects are `ai-automation/dev` and `apps-data/dev`; target metadata is in
-`config/neon.toml`. You can inject those variables through an existing runner
-instead. No `.env` loader is installed.
-
-Use new output directories and explicit experiment names to preserve previous
-trials. Omit `--fresh` to request compatible accepted-interpretation reuse. Reuse
-currently requires matching native bytes and relevant metadata, parser/schema/
-preparation code, dependency lock, and configuration. Changed unclassified source
-fields cause a cache miss. The prototype does not claim to recognize arbitrary
-collector-specific volatile fields.
-
-`dev-b` selects the complete 24-product HTML capture. `holdout-c` is reserved for
-the frozen comparison after development. Parser tools see only the selected
-package; `corpus/oracle/expected.json` is evaluator input, never parser input.
-Each trial retains typed output, request traces, usage, publication status, and SQL
-read snapshots under its output directory. These files contain source material;
-keep credential headers and environment dumps out of them.
-
-Inspect a saved trial without model calls or database access:
+Use a new output directory for each run. Arbitrary native files use the same
+parser; supply trusted acquisition context when known:
 
 ```bash
-uv run techdeals-ingest evaluate --package small-a \
-  --trial .runs/my-small-proof --output .runs/my-small-proof-review.json
+python scripts/with_doppler.py uv run techdeals-ingest ingest \
+  --input /path/to/scraped.json --namespace source-site \
+  --retrieved-at 2026-10-16T12:00:00Z --acquisition-key collector-run-record \
+  --output .runs/native-import
 ```
 
-The evaluation shows exact assertions and explicit requirements needing source
-review. It provides no overall correctness score. A JSON-schema pass, evidence
-reference, or database round trip does not establish factual correctness.
+Omit retrieval time when unknown. File modification time is never promoted to
+market observation time. The command retains bytes before inference. Output
+includes `result.json`, `report.json`, SDK messages in `trace/`, and actual
+attempt-scoped `database-entries.json` and `database-prices.json`. A schema pass
+or an empty issues list does not establish factual correctness. Reports with
+issues return a nonzero exit status while retaining useful extracted entries.
+Oversized inputs and unsupported text encodings are explicit failures/issues,
+not silently shortened source material.
 
-All frozen captures currently have unknown trusted retrieval times. Their useful
-results remain accessible through `listing_sightings`, `undated_evidence`, and
-`unresolved_entries`. `current_listings`, `current_items`, and `current_prices`
-require established source identities and retrieval times. `listing_changes`
-keeps dated change episodes; `ingestion_failures` exposes failed/missing units.
-`ingestion_outcomes` exposes accepted unit dispositions, including `no_offer`
-results that correctly have no listing or price row.
-Every view carries experiment and candidate (`arm`) dimensions.
+The helper reads the existing Doppler projects `ai-automation/dev` and
+`apps-data/dev`, checks the host/database against `config/neon.toml`, and injects
+credentials without writing them. The target is the existing isolated Neon
+branch `dev/ingestion-exercise` (`br-curly-dust-b4dszjr9`), project
+`late-wave-13685431`, database `ingestion_spike`. No production schema or
+collector is changed. Local traces contain source material and remain ignored.
 
-For example, another agent can retrieve stored prices with their seller/location
-facts and original date claims:
+## Read stored data
+
+Entry fields are named columns, prices use exact PostgreSQL NUMERIC, and variable
+attributes and native date claims use JSONB. SQL views are `ingest_entries`,
+`ingest_prices`, `ingest_current_entries`, `ingest_current_prices`,
+`ingest_history`, and `ingest_failures`. The CLI accepts those names without the
+`ingest_` prefix and supports `--attempt-id` for a particular run.
 
 ```sql
-SELECT s.title, p.amount, p.currency, p.kind,
-       s.fields->'seller'->'value' AS seller,
-       s.fields->'location'->'value' AS location,
-       s.observed_at, s.time_status, s.payload->'source_dates' AS source_dates
-FROM listing_sightings s
-JOIN prices p ON p.result_id = s.result_id AND p.offer_id = s.local_id
-WHERE s.experiment_id = 'my-development' AND s.arm = 'staged';
+SELECT title, amount, currency, original, kind, basis, conditions,
+       seller, location, observed_at, source_dates, input_ids
+FROM ingest_prices
+WHERE attempt_id = 'the-attempt-id-from-report';
 ```
 
-Authored or derived fixtures do not establish missing real-source coverage. The
-intended destination is a reviewed improvement to the main TechDeals project once
-the parsing behavior and useful SQL results have been demonstrated.
+`entries` and `prices` expose stored interpretations, including unknown-time or
+unresolved-identity evidence. They include sightings and should not be counted
+as independent offers. Current views group by namespace, native ID, variant and
+seller, require trusted retrieval time and no reported issues, and expose
+conflicting states at an equal latest time. Unknown identity stays unresolved.
+History retains sightings; later unchanged acquisitions can reuse the extraction
+without another model call. Reimporting the same capture/result is idempotent.
+Revised interpretations and identity reliability still require inspection;
+these keys do not prove arbitrary source identity semantics.
+
+## Demonstration status
+
+The first replacement-runtime `small-a` run (two complete native captures,
+11,584 bytes) timed out at the configured 90-second limit before the model
+returned extraction output. Neon retained both inputs and the failed attempt;
+zero entries were produced in that run. A one-record check is the next live step. Offline and explicit live SQL tests check
+application mechanics; they do not certify model extraction quality.
+
+All frozen captures currently have unknown trusted retrieval times. Do not
+label them current market observations. The full 24-product HTML capture is
+available as `dev-b`; `holdout-c` remains reserved. The oracle is review input,
+never parser input. Real multi-item sale posts, split-auction captures, verified
+retrieval-date semantics and acquisition provenance for additional collector
+routes remain gaps. Large-document preparation and throughput are subsequent
+demonstrations, not delivered claims.
+
+The destination is a reviewed improvement to the main TechDeals project after
+useful extraction and repeat-scrape behavior have been demonstrated. This PR
+stays open for review; it does not authorize production incorporation.

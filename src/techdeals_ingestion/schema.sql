@@ -1,107 +1,162 @@
-CREATE TABLE IF NOT EXISTS raw_content (sha256 text PRIMARY KEY, content bytea NOT NULL);
-CREATE TABLE IF NOT EXISTS captures (
- capture_id text PRIMARY KEY, acquisition_key text NOT NULL, sha256 text NOT NULL REFERENCES raw_content,
- media_type text NOT NULL, source_namespace text, retrieved_at timestamptz, linked_group text,
- metadata jsonb NOT NULL, UNIQUE(acquisition_key,capture_id));
-CREATE TABLE IF NOT EXISTS attempts (
- attempt_key text PRIMARY KEY, package_id text NOT NULL, experiment_id text NOT NULL, arm text NOT NULL,
- result jsonb NOT NULL, errors jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS observations (
- observation_id text PRIMARY KEY, acquisition_keys jsonb NOT NULL, entry_refs jsonb NOT NULL,
- observed_at timestamptz, time_status text NOT NULL);
-CREATE TABLE IF NOT EXISTS interpretations (
- result_id text PRIMARY KEY, observation_id text NOT NULL REFERENCES observations,
- attempt_key text NOT NULL REFERENCES attempts, experiment_id text NOT NULL, arm text NOT NULL,
- unit_id text NOT NULL, semantic_key text NOT NULL, parser_fingerprint text NOT NULL,
- payload jsonb NOT NULL, input_capture_ids jsonb NOT NULL, reused_from text REFERENCES interpretations,
- UNIQUE(result_id,observation_id));
-CREATE TABLE IF NOT EXISTS accepted (
- observation_id text NOT NULL, experiment_id text NOT NULL, arm text NOT NULL, result_id text NOT NULL,
- PRIMARY KEY(observation_id,experiment_id,arm),
- FOREIGN KEY(result_id,observation_id) REFERENCES interpretations(result_id,observation_id));
-CREATE TABLE IF NOT EXISTS listings (
- listing_id text PRIMARY KEY, source_namespace text NOT NULL, native_id text NOT NULL, variant_key text NOT NULL,
- UNIQUE(source_namespace,native_id,variant_key));
-CREATE TABLE IF NOT EXISTS offers (
- result_id text NOT NULL REFERENCES interpretations, local_id text NOT NULL, listing_id text REFERENCES listings,
- title text, fields jsonb NOT NULL, payload jsonb NOT NULL, semantic_payload jsonb NOT NULL, PRIMARY KEY(result_id,local_id));
-CREATE TABLE IF NOT EXISTS items (
- result_id text NOT NULL, local_id text NOT NULL, offer_id text NOT NULL, title text, role text NOT NULL,
- quantity numeric, attributes jsonb NOT NULL, payload jsonb NOT NULL, PRIMARY KEY(result_id,local_id),
- FOREIGN KEY(result_id,offer_id) REFERENCES offers(result_id,local_id));
-CREATE TABLE IF NOT EXISTS prices (
- result_id text NOT NULL, local_id text NOT NULL, offer_id text NOT NULL, amount numeric, currency text,
- kind text NOT NULL, quantity numeric, scope_refs jsonb NOT NULL, payload jsonb NOT NULL,
- PRIMARY KEY(result_id,local_id), FOREIGN KEY(result_id,offer_id) REFERENCES offers(result_id,local_id));
-CREATE TABLE IF NOT EXISTS relations (
- result_id text NOT NULL, offer_id text NOT NULL, ordinal integer NOT NULL, payload jsonb NOT NULL,
- PRIMARY KEY(result_id,offer_id,ordinal), FOREIGN KEY(result_id,offer_id) REFERENCES offers(result_id,local_id));
--- Additive, repeatable strengthening for databases initialized by the first spike migration.
+-- These are derived query surfaces owned by this small ingestion schema.
+-- Recreate them in dependency order so additive column changes remain repeatable.
+DROP VIEW IF EXISTS ingest_current_prices;
+DROP VIEW IF EXISTS ingest_current_entries;
+DROP VIEW IF EXISTS ingest_history;
+DROP VIEW IF EXISTS ingest_prices;
+DROP VIEW IF EXISTS ingest_entries;
+DROP VIEW IF EXISTS ingest_failures;
+
+CREATE TABLE IF NOT EXISTS ingest_raw_content (
+    sha256 text PRIMARY KEY,
+    content bytea NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ingest_sources (
+    input_id text PRIMARY KEY,
+    acquisition_key text NOT NULL UNIQUE,
+    sha256 text NOT NULL REFERENCES ingest_raw_content(sha256),
+    media_type text NOT NULL,
+    namespace text,
+    retrieved_at timestamptz,
+    url text,
+    linked_group text,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS ingest_attempts (
+    attempt_id text PRIMARY KEY,
+    receipt_key text NOT NULL UNIQUE,
+    semantic_key text NOT NULL,
+    parser_key text NOT NULL,
+    source_ids jsonb NOT NULL,
+    reuse_of text REFERENCES ingest_attempts(attempt_id),
+    result jsonb,
+    error text,
+    saved_entries integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((result IS NULL) <> (error IS NULL))
+);
+CREATE INDEX IF NOT EXISTS ingest_attempts_cache_idx
+    ON ingest_attempts(semantic_key, parser_key, created_at DESC)
+    WHERE error IS NULL AND result IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS ingest_entry_rows (
+    entry_id text PRIMARY KEY,
+    attempt_id text NOT NULL REFERENCES ingest_attempts(attempt_id),
+    title text,
+    description text,
+    native_id text,
+    variant_id text,
+    sku text,
+    url text,
+    seller text,
+    location text,
+    condition text,
+    availability text,
+    attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+    source_dates jsonb NOT NULL DEFAULT '[]'::jsonb,
+    issues jsonb NOT NULL DEFAULT '[]'::jsonb,
+    identity_key text,
+    semantic_hash text NOT NULL,
+    observed_at timestamptz,
+    has_reported_issues boolean NOT NULL
+);
+ALTER TABLE ingest_entry_rows
+    ADD COLUMN IF NOT EXISTS has_reported_issues boolean;
 DO $$ BEGIN
- IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='captures_acquisition_unique') THEN
-  ALTER TABLE captures ADD CONSTRAINT captures_acquisition_unique UNIQUE(acquisition_key);
- END IF;
- IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='interpretations_selection_unique') THEN
-  ALTER TABLE interpretations ADD CONSTRAINT interpretations_selection_unique
-   UNIQUE(result_id,observation_id,experiment_id,arm);
- END IF;
- IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='accepted_selection_fk') THEN
-  ALTER TABLE accepted ADD CONSTRAINT accepted_selection_fk
-   FOREIGN KEY(result_id,observation_id,experiment_id,arm)
-   REFERENCES interpretations(result_id,observation_id,experiment_id,arm);
- END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='ingest_entry_rows' AND column_name='is_complete'
+    ) THEN
+        UPDATE ingest_entry_rows
+        SET has_reported_issues = NOT is_complete
+        WHERE has_reported_issues IS NULL;
+    ELSE
+        UPDATE ingest_entry_rows SET has_reported_issues = false
+        WHERE has_reported_issues IS NULL;
+    END IF;
 END $$;
-CREATE OR REPLACE VIEW ingestion_failures AS
- SELECT a.attempt_key,a.package_id,a.experiment_id,a.arm,a.created_at,
-        e.value->>'unit_id' AS unit_id,e.value->>'error' AS error,a.result AS attempt_payload
- FROM attempts a CROSS JOIN LATERAL jsonb_array_elements(a.errors) e(value);
--- Accepted unit outcomes remain queryable even when no offer row was produced.
-CREATE OR REPLACE VIEW ingestion_outcomes AS
- SELECT i.result_id,i.observation_id,i.experiment_id,i.arm,i.unit_id,i.input_capture_ids,
- i.payload->>'status' AS status,i.payload AS unit_payload,ob.observed_at,ob.time_status,i.reused_from
- FROM interpretations i JOIN accepted a ON a.result_id=i.result_id
- JOIN observations ob ON ob.observation_id=i.observation_id;
-CREATE OR REPLACE VIEW listing_sightings AS
- SELECT o.*, i.observation_id,i.experiment_id,i.arm,i.unit_id,i.input_capture_ids,
- ob.observed_at,ob.time_status,i.payload AS unit_payload,i.reused_from
- FROM offers o JOIN interpretations i USING(result_id)
- JOIN accepted a ON a.result_id=i.result_id JOIN observations ob ON ob.observation_id=i.observation_id;
-CREATE OR REPLACE VIEW unresolved_entries AS SELECT * FROM listing_sightings WHERE listing_id IS NULL;
-CREATE OR REPLACE VIEW undated_evidence AS SELECT * FROM listing_sightings WHERE observed_at IS NULL;
--- Partial sightings retain their own evidence and dates. Only complete states can
--- replace current state; no fields or freshness dates are merged across observations.
-CREATE OR REPLACE VIEW current_listings AS
- WITH complete AS (
- SELECT * FROM listing_sightings WHERE listing_id IS NOT NULL AND observed_at IS NOT NULL
- AND unit_payload->>'status'='complete'),
- ranked AS (SELECT s.*, dense_rank() OVER (
- PARTITION BY listing_id,experiment_id,arm ORDER BY observed_at DESC) AS time_rank
- FROM complete s),
- representatives AS (
- SELECT DISTINCT ON (listing_id,experiment_id,arm,semantic_payload) * FROM ranked
- WHERE time_rank=1
- ORDER BY listing_id,experiment_id,arm,semantic_payload,result_id,local_id)
- SELECT r.*, (SELECT count(DISTINCT s.semantic_payload)>1 FROM complete s
- WHERE s.listing_id=r.listing_id AND s.experiment_id=r.experiment_id AND s.arm=r.arm
- AND s.observed_at=r.observed_at) AS equal_time_conflict
- FROM representatives r;
-CREATE OR REPLACE VIEW current_items AS
- SELECT i.*, c.listing_id,c.observation_id,c.experiment_id,c.arm,c.observed_at,c.equal_time_conflict
- FROM items i JOIN current_listings c ON c.result_id=i.result_id AND c.local_id=i.offer_id;
-CREATE OR REPLACE VIEW current_prices AS
- SELECT p.*, c.listing_id,c.observation_id,c.experiment_id,c.arm,c.observed_at,c.equal_time_conflict
- FROM prices p JOIN current_listings c ON c.result_id=p.result_id AND c.local_id=p.offer_id;
-CREATE OR REPLACE VIEW listing_changes AS
- WITH grouped AS (
- SELECT listing_id,experiment_id,arm,observed_at,count(DISTINCT semantic_payload)>1 AS conflict,
-        (jsonb_agg(DISTINCT semantic_payload)->0) AS meaning
- FROM listing_sightings WHERE listing_id IS NOT NULL AND observed_at IS NOT NULL
- AND unit_payload->>'status'='complete'
- GROUP BY listing_id,experiment_id,arm,observed_at),
- ordered AS (SELECT *,lag(meaning) OVER
- (PARTITION BY listing_id,experiment_id,arm ORDER BY observed_at) AS previous_payload
- FROM grouped WHERE NOT conflict)
- SELECT s.*,o.previous_payload FROM ordered o JOIN listing_sightings s
- USING(listing_id,experiment_id,arm,observed_at)
- WHERE s.unit_payload->>'status'='complete'
- AND (o.previous_payload IS NULL OR o.previous_payload IS DISTINCT FROM o.meaning);
+DROP INDEX IF EXISTS ingest_entries_identity_idx;
+ALTER TABLE ingest_entry_rows DROP COLUMN IF EXISTS is_complete;
+ALTER TABLE ingest_entry_rows ALTER COLUMN has_reported_issues SET DEFAULT false;
+ALTER TABLE ingest_entry_rows ALTER COLUMN has_reported_issues SET NOT NULL;
+COMMENT ON COLUMN ingest_entry_rows.has_reported_issues IS
+    'True when the extraction explicitly reported a source or entry issue; false does not assert factual completeness.';
+CREATE INDEX IF NOT EXISTS ingest_entries_identity_idx
+    ON ingest_entry_rows(identity_key, observed_at DESC)
+    WHERE identity_key IS NOT NULL AND observed_at IS NOT NULL AND NOT has_reported_issues;
+
+CREATE TABLE IF NOT EXISTS ingest_price_rows (
+    entry_id text NOT NULL REFERENCES ingest_entry_rows(entry_id),
+    ordinal integer NOT NULL,
+    amount numeric,
+    currency text,
+    original text NOT NULL,
+    kind text NOT NULL,
+    basis text,
+    conditions text,
+    PRIMARY KEY(entry_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS ingest_entry_sources (
+    entry_id text NOT NULL REFERENCES ingest_entry_rows(entry_id),
+    input_id text NOT NULL REFERENCES ingest_sources(input_id),
+    locator text,
+    PRIMARY KEY(entry_id, input_id, locator)
+);
+
+CREATE VIEW ingest_entries AS
+SELECT e.*, a.parser_key, a.reuse_of, a.created_at AS imported_at,
+       COALESCE(src.input_ids, '[]'::jsonb) AS input_ids,
+       src.namespace
+FROM ingest_entry_rows e
+JOIN ingest_attempts a USING (attempt_id)
+LEFT JOIN LATERAL (
+    SELECT jsonb_agg(DISTINCT s.input_id ORDER BY s.input_id) AS input_ids,
+           jsonb_agg(jsonb_build_object('input_id',s.input_id,'locator',NULLIF(es.locator,''))
+                     ORDER BY s.input_id, es.locator) AS source_refs,
+           CASE WHEN count(DISTINCT s.namespace) = 1 THEN min(s.namespace) END AS namespace
+    FROM ingest_entry_sources es JOIN ingest_sources s USING (input_id)
+    WHERE es.entry_id = e.entry_id
+) src ON true;
+
+CREATE VIEW ingest_prices AS
+SELECT p.*, e.attempt_id, e.title, e.native_id, e.variant_id, e.sku, e.url,
+       e.seller, e.location, e.condition, e.availability, e.attributes,
+       e.source_dates, e.issues, e.identity_key, e.observed_at, e.has_reported_issues,
+       e.parser_key, e.reuse_of, e.imported_at, e.input_ids, e.namespace
+FROM ingest_price_rows p JOIN ingest_entries e USING (entry_id);
+
+CREATE VIEW ingest_history AS
+SELECT e.*,
+       COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.ordinal)
+                 FROM ingest_prices p WHERE p.entry_id=e.entry_id), '[]'::jsonb) AS prices
+FROM ingest_entries e;
+
+CREATE VIEW ingest_current_entries AS
+WITH dated AS (
+    SELECT * FROM ingest_entries
+    WHERE identity_key IS NOT NULL AND observed_at IS NOT NULL AND NOT has_reported_issues
+), latest AS (
+    SELECT d.*, dense_rank() OVER (PARTITION BY identity_key ORDER BY observed_at DESC) AS date_rank
+    FROM dated d
+), latest_states AS (
+    SELECT DISTINCT ON (identity_key, observed_at, semantic_hash) *
+    FROM latest WHERE date_rank=1
+    ORDER BY identity_key, observed_at, semantic_hash, entry_id
+), conflicts AS (
+    SELECT identity_key, observed_at, count(DISTINCT semantic_hash)>1 AS equal_time_conflict
+    FROM latest WHERE date_rank=1 GROUP BY identity_key, observed_at
+)
+SELECT s.*, c.equal_time_conflict
+FROM latest_states s JOIN conflicts c USING(identity_key, observed_at);
+
+CREATE VIEW ingest_current_prices AS
+SELECT p.*, c.equal_time_conflict
+FROM ingest_prices p JOIN ingest_current_entries c USING(entry_id);
+
+CREATE VIEW ingest_failures AS
+SELECT attempt_id, receipt_key, semantic_key, parser_key, source_ids,
+       reuse_of, error, created_at, source_ids AS input_ids
+FROM ingest_attempts WHERE error IS NOT NULL;

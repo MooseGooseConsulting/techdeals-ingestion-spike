@@ -1,9 +1,9 @@
 # Build the ingestion path
 
 Revised 2026-10-16 to address the design before further PR-review work.
-[The design correction](design.md) defines the next implementation target.
-The current prototype has not demonstrated useful extraction; passing its local
-checks does not complete this plan.
+[The design correction](design.md) defines the implementation target.
+The direct runtime replaces the graph prototype; passing its local checks does
+not complete this plan. README.md records the current demonstration status.
 
 ## Goal
 

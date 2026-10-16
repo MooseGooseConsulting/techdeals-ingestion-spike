@@ -1,541 +1,421 @@
-"""PostgreSQL evidence retention and immutable, experiment-scoped interpretations."""
+"""Small PostgreSQL store for retained inputs and extracted entries."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections import Counter
+import re
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from .contracts import ParseBatchResult, prepare_units
-from .validation import require_valid_result
+from .models import Entry, Extraction, Source
 
-VIEWS = frozenset(
-    {
-        "current_listings",
-        "current_items",
-        "current_prices",
-        "listing_sightings",
-        "listing_changes",
-        "undated_evidence",
-        "unresolved_entries",
-        "ingestion_failures",
-        "ingestion_outcomes",
+VIEWS = frozenset({"entries", "prices", "current_entries", "current_prices", "history", "failures"})
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
+
+
+def _source_context(source: Source) -> dict[str, Any]:
+    """Context that can change interpretation; receipt IDs and trusted time are excluded."""
+    metadata = {
+        key: value
+        for key, value in source.metadata.items()
+        if key not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
     }
-)
-
-
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
-
-
-def semantic_key(package, unit, parser_fingerprint):
-    captures = {c.capture_id: c for c in package.captures}
-    parts = []
-    for ref in unit.input_refs:
-        c = captures[ref.capture_id]
-        metadata = {
-            k: v
-            for k, v in c.metadata.items()
-            if k not in {"retrieved_at", "acquisition_key", "capture_id", "provenance", "sha256"}
-        }
-        parts.append(
-            [
-                hashlib.sha256(c.path.read_bytes()).hexdigest(),
-                c.media_type,
-                c.source_namespace,
-                ref.locator,
-                metadata,
-            ]
-        )
-    return digest(["contract-v2", parser_fingerprint, parts])
-
-
-def _rebind(value, mapping):
-    if isinstance(value, dict):
-        if set(value) == {"capture_id", "locator"}:
-            return {**value, "capture_id": mapping.get(value["capture_id"], value["capture_id"])}
-        return {k: v if k == "value" else _rebind(v, mapping) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_rebind(v, mapping) for v in value]
-    return value
-
-
-def _meaning(value):
-    """Compare asserted meaning without evidence handles or model-assigned IDs."""
-    if isinstance(value, dict):
-        if {"local_id", "items", "prices", "relations"} <= value.keys():
-            return _offer_meaning(value)
-        return {
-            k: v if k == "value" else _meaning(v)
-            for k, v in value.items()
-            if k not in {"evidence", "identity_claim", "local_id"}
-        }
-    if isinstance(value, list):
-        return [_meaning(v) for v in value]
-    return value
-
-
-def _offer_meaning(offer):
-    # Scope and relationship targets are substantive. Replace their arbitrary
-    # names with the target's asserted content, rather than discarding the refs.
-    targets = {offer["local_id"]: ["offer"]}
-    targets.update({item["local_id"]: ["item", _meaning(item)] for item in offer["items"]})
-
-    def target(ref):
-        return targets.get(ref, ["unresolved", ref])
-
-    def ordered(values):
-        return sorted(values, key=lambda value: json.dumps(value, sort_keys=True, default=str))
-
-    result = {
-        k: _meaning(v)
-        for k, v in offer.items()
-        if k not in {"local_id", "evidence", "identity_claim", "items", "prices", "relations"}
+    return {
+        "content_sha256": hashlib.sha256(source.content).hexdigest(),
+        "media_type": source.media_type,
+        "namespace": source.namespace,
+        "url": source.url,
+        "metadata": metadata,
     }
-    result["items"] = ordered([_meaning(item) for item in offer["items"]])
-    prices = [
-        {**_meaning(price), "scope_refs": ordered([target(ref) for ref in price["scope_refs"]])}
-        for price in offer["prices"]
-    ]
-    targets.update(
+
+
+def semantic_key(sources: list[Source], parser_key: str) -> str:
+    """Stable exact-content key for parser reuse across later acquisition receipts."""
+    contexts = [_source_context(source) for source in sources]
+    # Preserve whether inputs were linked without making the collector's group ID semantic.
+    groups: dict[str, list[str]] = {}
+    for source, context in zip(sources, contexts, strict=True):
+        if source.linked_group:
+            groups.setdefault(source.linked_group, []).append(_digest(context))
+    linked = sorted(sorted(values) for values in groups.values())
+    return _digest(
         {
-            price["local_id"]: ["price", meaning]
-            for price, meaning in zip(offer["prices"], prices, strict=True)
+            "version": 1,
+            "parser_key": parser_key,
+            "sources": sorted(contexts, key=_json),
+            "linked": linked,
         }
     )
-    result["prices"] = ordered(prices)
-    result["relations"] = ordered(
-        [
-            {
-                **_meaning(relation),
-                "subject_ref": target(relation["subject_ref"]),
-                "object_ref": target(relation["object_ref"]),
-                "self_reference": relation["subject_ref"] == relation["object_ref"],
-            }
-            for relation in offer["relations"]
-        ]
+
+
+def _typed_source_refs(extraction: Extraction, mapping: dict[str, str]) -> Extraction:
+    """Rebind only contract source_refs. Identical-looking native JSON stays untouched."""
+    data = extraction.model_dump(mode="python")
+    for entry in data["entries"]:
+        for ref in entry["source_refs"]:
+            ref["input_id"] = mapping.get(ref["input_id"], ref["input_id"])
+    for issue in data["issues"]:
+        issue["input_id"] = mapping.get(issue["input_id"], issue["input_id"])
+    return Extraction.model_validate(data)
+
+
+def _meaning(entry: Entry) -> dict[str, Any]:
+    data = entry.model_dump(mode="json")
+    data.pop("source_refs", None)
+    return data
+
+
+def _safe_error(error: str) -> str:
+    """Keep useful failure context while removing common inline credential forms."""
+    value = re.sub(r"(://[^:/\s]+:)[^@/\s]+@", r"\1[redacted]@", str(error))
+    value = re.sub(
+        r"(?i)\b(password|passwd|token|api[_-]?key|secret)\s*([=:])\s*[^\s,;]+",
+        r"\1\2[redacted]",
+        value,
     )
-    return result
+    return value[:2000]
 
 
 class Store:
-    def __init__(self, dsn):
+    def __init__(self, dsn: str):
         self.dsn = dsn
-        self._reuse_sources = {}
-        self._reuse_signature = None
-        self._reuse_result = None
 
     def connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
 
-    def migrate(self):
+    def migrate(self) -> None:
+        sql = Path(__file__).with_name("schema.sql").read_text()
         with self.connect() as conn:
-            conn.execute(Path(__file__).with_name("schema.sql").read_text())
-            # Upgrade derived comparisons while retaining original payloads/evidence.
-            for row in conn.execute(
-                "SELECT result_id,local_id,payload,semantic_payload FROM offers"
-            ).fetchall():
-                meaning = _meaning(row["payload"])
-                if meaning != row["semantic_payload"]:
-                    conn.execute(
-                        "UPDATE offers SET semantic_payload=%s WHERE result_id=%s AND local_id=%s",
-                        (Jsonb(meaning), row["result_id"], row["local_id"]),
-                    )
+            conn.execute(sql)
 
-    def retain_package(self, package, index=None):
-        """Commit bytes before preparation or inference; conflicting capture IDs are errors."""
+    def retain(self, sources: list[Source]) -> None:
+        """Persist exact bytes and acquisition receipts before parser work begins."""
         with self.connect() as conn:
-            for c in package.captures:
-                raw = index.originals[c.capture_id] if index else c.path.read_bytes()
-                sha = hashlib.sha256(raw).hexdigest()
+            for source in sources:
+                sha = hashlib.sha256(source.content).hexdigest()
                 conn.execute(
-                    "INSERT INTO raw_content VALUES (%s,%s) ON CONFLICT DO NOTHING", (sha, raw)
+                    "INSERT INTO ingest_raw_content(sha256,content) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                    (sha, source.content),
                 )
-                values = (
-                    c.capture_id,
-                    c.acquisition_key,
-                    sha,
-                    c.media_type,
-                    c.source_namespace,
-                    c.retrieved_at,
-                    c.linked_group,
-                    Jsonb(c.metadata),
-                )
+                metadata = Jsonb(source.metadata)
                 existing = conn.execute(
-                    "SELECT * FROM captures WHERE capture_id=%s", (c.capture_id,)
-                ).fetchone()
+                    "SELECT * FROM ingest_sources WHERE input_id=%s OR acquisition_key=%s",
+                    (source.input_id, source.acquisition_key),
+                ).fetchall()
                 if existing:
-                    expected = dict(
-                        zip(
-                            (
-                                "capture_id",
-                                "acquisition_key",
-                                "sha256",
-                                "media_type",
-                                "source_namespace",
-                                "retrieved_at",
-                                "linked_group",
-                                "metadata",
-                            ),
-                            values,
-                        )
-                    )
-                    expected["metadata"] = c.metadata
-                    if existing != expected:
+                    row = existing[0]
+                    expected = {
+                        "input_id": source.input_id,
+                        "acquisition_key": source.acquisition_key,
+                        "sha256": sha,
+                        "media_type": source.media_type,
+                        "namespace": source.namespace,
+                        "retrieved_at": source.retrieved_at,
+                        "url": source.url,
+                        "linked_group": source.linked_group,
+                        "metadata": source.metadata,
+                    }
+                    if len(existing) != 1 or row != expected:
                         raise ValueError(
-                            f"capture_id already retained with different acquisition: {c.capture_id}"
+                            "input or acquisition key already retained with different source data"
                         )
-                else:
-                    conn.execute("INSERT INTO captures VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", values)
-        return [c.capture_id for c in package.captures]
-
-    def reuse(self, package, index, experiment_id, arm, parser_fingerprint):
-        self._reuse_sources = {}
-        self._reuse_signature = None
-        self._reuse_result = None
-        units = prepare_units(package)
-        results = []
-        pending_sources = {}
-        with self.connect() as conn:
-            for unit in units:
-                key = semantic_key(package, unit, parser_fingerprint)
-                prior = conn.execute(
-                    """SELECT i.* FROM interpretations i JOIN accepted a ON a.result_id=i.result_id
-                    WHERE semantic_key=%s AND i.experiment_id=%s AND i.arm=%s
-                    AND parser_fingerprint=%s AND i.payload->>'status' IN ('complete','no_offer')
-                    ORDER BY (i.payload->>'status'='complete') DESC, i.result_id LIMIT 1""",
-                    (key, experiment_id, arm, parser_fingerprint),
-                ).fetchone()
-                if not prior or prior["payload"]["status"] not in ("complete", "no_offer"):
-                    return None
-                old_ids = prior["input_capture_ids"]
-                new_ids = [r.capture_id for r in unit.input_refs]
-                if len(old_ids) != len(new_ids):
-                    return None
-                payload = _rebind(prior["payload"], dict(zip(old_ids, new_ids)))
-                payload["unit_id"] = unit.unit_id
-                results.append(payload)
-                pending_sources[(package.package_id, unit.unit_id, key)] = prior["result_id"]
-        result = ParseBatchResult(batch_id=package.package_id, units=results)
-        result = require_valid_result(result, units, index)
-        self._reuse_sources = pending_sources
-        self._reuse_result = result
-        self._reuse_signature = (
-            package.package_id,
-            experiment_id,
-            arm,
-            parser_fingerprint,
-            digest(result.model_dump(mode="json")),
-        )
-        return result
-
-    def publish(
-        self,
-        package,
-        result,
-        index,
-        experiment_id,
-        arm,
-        attempt_key,
-        parser_fingerprint="unspecified",
-    ):
-        # Provenance belongs only to the fully validated returned reuse batch and
-        # is consumed even if publication fails or a different batch is supplied.
-        signature = (
-            package.package_id,
-            experiment_id,
-            arm,
-            parser_fingerprint,
-            digest(result.model_dump(mode="json")),
-        )
-        reuse_sources = (
-            self._reuse_sources
-            if result is self._reuse_result and signature == self._reuse_signature
-            else {}
-        )
-        self._reuse_sources = {}
-        self._reuse_signature = None
-        self._reuse_result = None
-        self.retain_package(package, index)
-        expected = {u.unit_id: u for u in prepare_units(package)}
-        errors, valid = [], []
-        seen = set()
-        counts = Counter(u.unit_id for u in result.units)
-        for unit in result.units:
-            try:
-                if counts[unit.unit_id] > 1:
-                    raise ValueError("duplicate unit")
-                seen.add(unit.unit_id)
-                require_valid_result(
-                    ParseBatchResult(batch_id=result.batch_id, units=[unit]),
-                    [expected[unit.unit_id]],
-                    index,
-                )
-                if unit.status == "failed":
-                    raise ValueError("; ".join(unit.issues) or "parser failed")
-                valid.append(unit)
-            except (ValueError, KeyError) as exc:
-                errors.append({"unit_id": unit.unit_id, "error": str(exc)})
-        for missing in expected.keys() - {u.unit_id for u in result.units}:
-            errors.append({"unit_id": missing, "error": "missing unit"})
-        report = {"attempt_key": attempt_key, "published_units": 0, "errors": errors}
-        captures = {c.capture_id: c for c in package.captures}
-        with self.connect() as conn:
-            prior = conn.execute(
-                "SELECT * FROM attempts WHERE attempt_key=%s", (attempt_key,)
-            ).fetchone()
-            if prior:
-                if (
-                    prior["result"] != result.model_dump(mode="json")
-                    or prior["experiment_id"] != experiment_id
-                    or prior["arm"] != arm
-                    or prior["package_id"] != package.package_id
-                ):
-                    raise ValueError("attempt_key collision")
-                report["published_units"] = conn.execute(
-                    "SELECT count(*) AS n FROM interpretations WHERE attempt_key=%s", (attempt_key,)
-                ).fetchone()["n"]
-                report["errors"] = prior["errors"]
-                return report
-            conn.execute(
-                """INSERT INTO attempts(attempt_key,package_id,experiment_id,arm,result,errors)
-                VALUES (%s,%s,%s,%s,%s,%s)""",
-                (
-                    attempt_key,
-                    package.package_id,
-                    experiment_id,
-                    arm,
-                    Jsonb(result.model_dump(mode="json")),
-                    Jsonb(errors),
-                ),
-            )
-            for unit in valid:
-                try:
-                    with conn.transaction():
-                        cs = [captures[r.capture_id] for r in expected[unit.unit_id].input_refs]
-                        dates = {c.retrieved_at for c in cs}
-                        observed_at = next(iter(dates)) if len(dates) == 1 else None
-                        time_status = (
-                            "known"
-                            if observed_at
-                            else ("conflicting" if len(dates) > 1 else "unknown")
-                        )
-                        refs = sorted(
-                            [
-                                [captures[r.capture_id].acquisition_key, r.locator]
-                                for r in expected[unit.unit_id].input_refs
-                            ]
-                        )
-                        observation = digest(refs)
-                        conn.execute(
-                            "INSERT INTO observations VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                            (
-                                observation,
-                                Jsonb([c.acquisition_key for c in cs]),
-                                Jsonb(refs),
-                                observed_at,
-                                time_status,
-                            ),
-                        )
-                        key = semantic_key(package, expected[unit.unit_id], parser_fingerprint)
-                        rid = uuid4().hex
-                        conn.execute(
-                            """INSERT INTO interpretations VALUES
-                            (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                            (
-                                rid,
-                                observation,
-                                attempt_key,
-                                experiment_id,
-                                arm,
-                                unit.unit_id,
-                                key,
-                                parser_fingerprint,
-                                Jsonb(unit.model_dump(mode="json")),
-                                Jsonb([c.capture_id for c in cs]),
-                                reuse_sources.get((package.package_id, unit.unit_id, key)),
-                            ),
-                        )
-                        for offer in unit.offers:
-                            listing = self._listing(conn, offer, captures)
-                            conn.execute(
-                                "INSERT INTO offers VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                                (
-                                    rid,
-                                    offer.local_id,
-                                    listing,
-                                    offer.title,
-                                    Jsonb(offer.fields.model_dump(mode="json")),
-                                    Jsonb(offer.model_dump(mode="json")),
-                                    Jsonb(_meaning(offer.model_dump(mode="json"))),
-                                ),
-                            )
-                            for item in offer.items:
-                                conn.execute(
-                                    "INSERT INTO items VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                                    (
-                                        rid,
-                                        item.local_id,
-                                        offer.local_id,
-                                        item.title,
-                                        item.role,
-                                        item.quantity,
-                                        Jsonb(
-                                            {
-                                                k: v.model_dump(mode="json")
-                                                for k, v in item.attributes.items()
-                                            }
-                                        ),
-                                        Jsonb(item.model_dump(mode="json")),
-                                    ),
-                                )
-                            for p in offer.prices:
-                                conn.execute(
-                                    "INSERT INTO prices VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                                    (
-                                        rid,
-                                        p.local_id,
-                                        offer.local_id,
-                                        p.amount,
-                                        p.currency,
-                                        p.kind,
-                                        p.quantity,
-                                        Jsonb(p.scope_refs),
-                                        Jsonb(p.model_dump(mode="json")),
-                                    ),
-                                )
-                            for ordinal, relation in enumerate(offer.relations):
-                                conn.execute(
-                                    "INSERT INTO relations VALUES (%s,%s,%s,%s)",
-                                    (
-                                        rid,
-                                        offer.local_id,
-                                        ordinal,
-                                        Jsonb(relation.model_dump(mode="json")),
-                                    ),
-                                )
-                        # Terminal corrections may revise the selected interpretation.
-                        # A partial rerun cannot erase a complete/no-offer selection.
-                        conn.execute(
-                            """INSERT INTO accepted VALUES (%s,%s,%s,%s)
-                            ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id
-                            WHERE %s IN ('complete','no_offer') OR NOT EXISTS (
-                                SELECT 1 FROM interpretations selected
-                                WHERE selected.result_id=accepted.result_id
-                                AND selected.payload->>'status' IN ('complete','no_offer'))""",
-                            (observation, experiment_id, arm, rid, unit.status),
-                        )
-                        report["published_units"] += 1
-                except (psycopg.Error, ValueError) as exc:
-                    errors.append({"unit_id": unit.unit_id, "error": str(exc)})
-            conn.execute(
-                "UPDATE attempts SET errors=%s WHERE attempt_key=%s", (Jsonb(errors), attempt_key)
-            )
-        return report
-
-    def record_failure(self, package, experiment_id, arm, attempt_key, reason):
-        """Retain preparation failures without requiring a successfully built evidence index."""
-        self.retain_package(package)
-        payload = ParseBatchResult(
-            batch_id=attempt_key,
-            units=[
-                {
-                    "unit_id": u.unit_id,
-                    "input_refs": u.input_refs,
-                    "status": "failed",
-                    "issues": [str(reason)],
-                }
-                for u in prepare_units(package)
-            ],
-        )
-        errors = [{"unit_id": u.unit_id, "error": str(reason)} for u in payload.units]
-        with self.connect() as conn:
-            existing = conn.execute(
-                "SELECT * FROM attempts WHERE attempt_key=%s", (attempt_key,)
-            ).fetchone()
-            if existing:
-                if (
-                    existing["package_id"] != package.package_id
-                    or existing["experiment_id"] != experiment_id
-                    or existing["arm"] != arm
-                    or existing["result"] != payload.model_dump(mode="json")
-                    or existing["errors"] != errors
-                ):
-                    raise ValueError("attempt_key collision")
-            else:
+                    continue
                 conn.execute(
-                    "INSERT INTO attempts(attempt_key,package_id,experiment_id,arm,result,errors) "
-                    "VALUES (%s,%s,%s,%s,%s,%s)",
+                    """INSERT INTO ingest_sources
+                    (input_id,acquisition_key,sha256,media_type,namespace,retrieved_at,url,linked_group,metadata)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
-                        attempt_key,
-                        package.package_id,
-                        experiment_id,
-                        arm,
-                        Jsonb(payload.model_dump(mode="json")),
-                        Jsonb(errors),
+                        source.input_id,
+                        source.acquisition_key,
+                        sha,
+                        source.media_type,
+                        source.namespace,
+                        source.retrieved_at,
+                        source.url,
+                        source.linked_group,
+                        metadata,
                     ),
                 )
-        return {"attempt_key": attempt_key, "published_units": 0, "errors": errors}
 
-    def _listing(self, conn, offer, captures):
-        identities = set()
-        for ref in offer.evidence:
-            c = captures[ref.capture_id]
-            binding = c.metadata.get("identity_bindings", {}).get(ref.locator)
-            if binding and binding.get("confirmed") is True:
-                ns = binding.get("source_namespace", c.source_namespace)
-                native = binding.get("native_id")
-                if ns and native:
-                    identities.add((ns, str(native), str(binding.get("variant_key") or "")))
-        if len(identities) != 1:
+    def _retained(self, conn, sources: list[Source]) -> dict[str, dict[str, Any]]:
+        ids = [source.input_id for source in sources]
+        rows = conn.execute(
+            "SELECT * FROM ingest_sources WHERE input_id = ANY(%s)", (ids,)
+        ).fetchall()
+        by_id = {row["input_id"]: row for row in rows}
+        for source in sources:
+            row = by_id.get(source.input_id)
+            if row is None or row["acquisition_key"] != source.acquisition_key:
+                raise ValueError(f"source must be retained before parsing: {source.input_id}")
+            expected = {
+                "sha256": hashlib.sha256(source.content).hexdigest(),
+                "media_type": source.media_type,
+                "namespace": source.namespace,
+                "retrieved_at": source.retrieved_at,
+                "url": source.url,
+                "linked_group": source.linked_group,
+                "metadata": source.metadata,
+            }
+            if any(row[name] != value for name, value in expected.items()):
+                raise ValueError(f"retained source receipt changed: {source.input_id}")
+        return by_id
+
+    def cached(self, sources: list[Source], parser_key: str) -> tuple[Extraction, str] | None:
+        if not sources:
             return None
-        identity = next(iter(identities))
-        lid = digest(identity)
-        conn.execute(
-            "INSERT INTO listings VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING", (lid, *identity)
+        key = semantic_key(sources, parser_key)
+        contexts = sorted((_source_context(s) for s in sources), key=_json)
+        with self.connect() as conn:
+            self._retained(conn, sources)
+            rows = conn.execute(
+                """SELECT attempt_id,result,source_ids FROM ingest_attempts
+                WHERE semantic_key=%s AND parser_key=%s AND error IS NULL AND result IS NOT NULL
+                ORDER BY created_at DESC, attempt_id DESC""",
+                (key, parser_key),
+            ).fetchall()
+            if not rows:
+                return None
+            wanted: dict[str, list[str]] = {}
+            for source in sources:
+                wanted.setdefault(_digest(_source_context(source)), []).append(source.input_id)
+            current_ids: dict[str, list[str]] = {}
+            for source in sorted(sources, key=lambda s: s.input_id):
+                current_ids.setdefault(_digest(_source_context(source)), []).append(source.input_id)
+            for row in rows:
+                old_sources = conn.execute(
+                    "SELECT input_id,sha256,media_type,namespace,url,metadata FROM ingest_sources WHERE input_id=ANY(%s)",
+                    (row["source_ids"],),
+                ).fetchall()
+                if len(old_sources) != len(sources):
+                    continue
+                old_contexts = [
+                    {
+                        "content_sha256": old["sha256"],
+                        "media_type": old["media_type"],
+                        "namespace": old["namespace"],
+                        "url": old["url"],
+                        "metadata": {
+                            k: v
+                            for k, v in old["metadata"].items()
+                            if k not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
+                        },
+                    }
+                    for old in old_sources
+                ]
+                if sorted(old_contexts, key=_json) != contexts:
+                    continue
+                old_by_context: dict[str, list[str]] = {}
+                for old in sorted(old_sources, key=lambda value: value["input_id"]):
+                    context = {
+                        "content_sha256": old["sha256"],
+                        "media_type": old["media_type"],
+                        "namespace": old["namespace"],
+                        "url": old["url"],
+                        "metadata": {
+                            k: v
+                            for k, v in old["metadata"].items()
+                            if k not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
+                        },
+                    }
+                    old_by_context.setdefault(_digest(context), []).append(old["input_id"])
+                mapping: dict[str, str] = {}
+                for context_digest, old_ids in old_by_context.items():
+                    new_ids = current_ids.get(context_digest, [])
+                    if len(old_ids) != len(new_ids):
+                        break
+                    mapping.update(zip(old_ids, new_ids, strict=True))
+                if len(mapping) != len(old_sources):
+                    continue
+                result = Extraction.model_validate(row["result"])
+                return _typed_source_refs(result, mapping), row["attempt_id"]
+        return None
+
+    def save(
+        self,
+        sources: list[Source],
+        result: Extraction | None,
+        parser_key: str,
+        *,
+        reuse_of: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        if not sources:
+            raise ValueError("at least one retained source is required")
+        if (result is None) == (error is None):
+            raise ValueError("supply exactly one of result or error")
+        if result is not None:
+            source_ids = {source.input_id for source in sources}
+            for entry in result.entries:
+                for ref in entry.source_refs:
+                    if ref.input_id not in source_ids:
+                        raise ValueError(f"entry references an unknown input: {ref.input_id}")
+            for issue in result.issues:
+                if issue.input_id not in source_ids:
+                    raise ValueError(f"source issue references an unknown input: {issue.input_id}")
+        key = semantic_key(sources, parser_key)
+        result_json = result.model_dump(mode="json") if result is not None else None
+        safe_error = _safe_error(error) if error is not None else None
+        receipt_key = _digest(
+            {
+                "acquisitions": sorted(source.acquisition_key for source in sources),
+                "semantic_key": key,
+                "result": result_json,
+                "error": safe_error,
+            }
         )
-        return lid
-
-    def resolve_listing(
-        self, result_id, offer_id, *, source_namespace, native_id, variant_key="", confirmed=False
-    ):
-        """Attach operator-confirmed identity to existing evidence, without a new sighting."""
-        if confirmed is not True or not source_namespace or not native_id:
-            raise ValueError("identity resolution requires confirmed source/native identity")
-        identity = (source_namespace, str(native_id), variant_key or "")
-        lid = digest(identity)
         with self.connect() as conn:
-            row = conn.execute(
-                "SELECT listing_id FROM offers WHERE result_id=%s AND local_id=%s FOR UPDATE",
-                (result_id, offer_id),
+            retained = self._retained(conn, sources)
+            prior = conn.execute(
+                "SELECT attempt_id,saved_entries FROM ingest_attempts WHERE receipt_key=%s",
+                (receipt_key,),
             ).fetchone()
-            if not row:
-                raise ValueError("unknown interpretation offer")
-            if row["listing_id"] is not None and row["listing_id"] != lid:
-                raise ValueError("offer already bound to another identity")
+            if prior:
+                return {"attempt_id": prior["attempt_id"], "saved_entries": prior["saved_entries"]}
+            attempt_id = str(uuid4())
+            count = len(result.entries) if result is not None else 0
             conn.execute(
-                "INSERT INTO listings VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING", (lid, *identity)
+                """INSERT INTO ingest_attempts
+                (attempt_id,receipt_key,semantic_key,parser_key,source_ids,reuse_of,result,error,saved_entries)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    attempt_id,
+                    receipt_key,
+                    key,
+                    parser_key,
+                    Jsonb([source.input_id for source in sources]),
+                    reuse_of,
+                    Jsonb(result_json) if result_json is not None else None,
+                    safe_error,
+                    count,
+                ),
             )
-            conn.execute(
-                "UPDATE offers SET listing_id=%s WHERE result_id=%s AND local_id=%s",
-                (lid, result_id, offer_id),
-            )
-        return lid
+            if result is not None:
+                for entry in result.entries:
+                    refs = entry.source_refs
+                    source_rows = [retained[ref.input_id] for ref in refs]
+                    times = {row["retrieved_at"] for row in source_rows}
+                    observed_at = (
+                        next(iter(times)) if len(times) == 1 and None not in times else None
+                    )
+                    meaning = _meaning(entry)
+                    identity_key = _identity_key(entry, source_rows)
+                    entry_id = str(uuid4())
+                    has_reported_issues = bool(result.issues or entry.issues)
+                    conn.execute(
+                        """INSERT INTO ingest_entry_rows
+                        (entry_id,attempt_id,title,description,native_id,variant_id,sku,url,seller,location,
+                         condition,availability,attributes,source_dates,issues,identity_key,semantic_hash,
+                         observed_at,has_reported_issues)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (
+                            entry_id,
+                            attempt_id,
+                            entry.title,
+                            entry.description,
+                            entry.native_id,
+                            entry.variant_id,
+                            entry.sku,
+                            entry.url,
+                            entry.seller,
+                            entry.location,
+                            entry.condition,
+                            entry.availability,
+                            Jsonb(entry.attributes),
+                            Jsonb([d.model_dump(mode="json") for d in entry.source_dates]),
+                            Jsonb(entry.issues),
+                            identity_key,
+                            _digest(meaning),
+                            observed_at,
+                            has_reported_issues,
+                        ),
+                    )
+                    for ref in refs:
+                        conn.execute(
+                            "INSERT INTO ingest_entry_sources(entry_id,input_id,locator) VALUES (%s,%s,%s)",
+                            (entry_id, ref.input_id, ref.locator or ""),
+                        )
+                    for ordinal, price in enumerate(entry.prices):
+                        conn.execute(
+                            """INSERT INTO ingest_price_rows
+                            (entry_id,ordinal,amount,currency,original,kind,basis,conditions)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                            (
+                                entry_id,
+                                ordinal,
+                                price.amount,
+                                price.currency,
+                                price.original,
+                                price.kind,
+                                price.basis,
+                                price.conditions,
+                            ),
+                        )
+            return {"attempt_id": attempt_id, "saved_entries": count}
 
-    def query(self, name, *, experiment_id=None, arm=None):
-        if name not in VIEWS:
-            raise ValueError("unknown read view")
-        filters, args = [], []
-        for column, value in [("experiment_id", experiment_id), ("arm", arm)]:
-            if value is not None:
-                filters.append(column + "=%s")
-                args.append(value)
-        sql = "SELECT * FROM " + name + (" WHERE " + " AND ".join(filters) if filters else "")
+    def query(self, view: str, **filters: Any) -> list[dict[str, Any]]:
+        if view not in VIEWS:
+            raise ValueError(f"unknown storage view: {view}")
+        allowed = {
+            "attempt_id",
+            "entry_id",
+            "input_id",
+            "namespace",
+            "native_id",
+            "variant_id",
+            "seller",
+            "parser_key",
+            "reuse_of",
+            "error",
+            "observed_at",
+            "identity_key",
+        }
+        unknown = set(filters) - allowed
+        if unknown:
+            raise ValueError(f"unsupported query filters: {', '.join(sorted(unknown))}")
+        clauses: list[str] = []
+        params: list[Any] = []
+        for name, value in filters.items():
+            if name in {"namespace", "native_id", "variant_id", "seller", "identity_key"}:
+                clauses.append(f"{name} = %s")
+            elif name == "input_id":
+                clauses.append("input_ids @> %s::jsonb")
+                params.append(json.dumps([value]))
+                continue
+            else:
+                clauses.append(f"{name} = %s")
+            params.append(value)
+        sql = f"SELECT * FROM ingest_{view}"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY 1"
         with self.connect() as conn:
-            return conn.execute(sql, args).fetchall()
+            return conn.execute(sql, params).fetchall()
+
+
+def _identity_key(entry: Entry, source_rows: list[dict[str, Any]]) -> str | None:
+    if not entry.native_id:
+        return None
+    namespaces = {row["namespace"] for row in source_rows}
+    if len(namespaces) != 1 or None in namespaces:
+        return None
+    return _digest(
+        {
+            "namespace": next(iter(namespaces)),
+            "native_id": entry.native_id,
+            "variant_id": entry.variant_id,
+            "seller": entry.seller,
+        }
+    )

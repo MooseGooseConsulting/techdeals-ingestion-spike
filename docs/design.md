@@ -1,8 +1,9 @@
 # Scraped source to useful database records
 
-Design correction, 2026-10-16. This is the next implementation target. The
-current executable still uses the larger prototype contract described below;
-this document does not claim that the replacement has been implemented.
+Design correction, 2026-10-16. The runtime now implements the direct entry
+interface described here. The older graph prototype has been removed. Live
+source-to-output-to-SQL evidence and remaining gaps are reported in README.md;
+implementation alone does not establish useful or complete extraction.
 
 ## The job
 

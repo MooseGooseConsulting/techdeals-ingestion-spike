@@ -1,12 +1,9 @@
 # Scraped records, dates, parsing, and deduplication
 
 Status: source, date and history requirements, revised 2026-10-16.
-The [design correction](design.md) now governs the model-facing output and
-execution path. The output/comparison sections below describe the earlier
-prototype and require alignment during replacement; they do not mandate its
-graph contract or experimental machinery. Source preservation, date semantics,
-identity uncertainty and deduplication requirements remain relevant. These are
-requirements to demonstrate, not claims of successful extraction.
+[design.md](design.md) describes the implemented entry interface. Requirements
+below remain acceptance criteria; implementation and test evidence do not by
+themselves establish faithful extraction or complete source coverage.
 
 The [problems document](problems.md) explains what needs solving. This document
 describes what scraped information means and how ingestion should handle it.
@@ -36,7 +33,7 @@ Source identifiers and timestamp meanings still need evidence. Use documented
 collector metadata where available and preserve uncertain native fields when
 their meaning is unresolved. The LLM must not turn an assumption about a field
 into an established identity or observation date. No handwritten semantic parser
-or source-specific onboarding is part of the initial comparison. An unfamiliar source must be accepted through the generic
+or source-specific onboarding is part of the initial path. An unfamiliar source must be accepted through the generic
 readers with explicit unresolved information where necessary. A demonstrated
 limitation may motivate a later reviewed design change.
 
@@ -70,9 +67,8 @@ establish structural variety.
 
 These are the initial design cases, not an exhaustive list of supported sources.
 The broader first working delivery must exercise them through the same storage
-and agent query path. The bounded comparison uses the frozen packages in the
-[plan](plan.md#frozen-evidence-packages); its constructed cases do not close the
-real-source evidence gaps. It does not require every combination of collector, format,
+and agent query path. The corpus manifest records frozen packages and provenance; constructed cases
+do not close the real-source evidence gaps. It does not require every combination of collector, format,
 hardware type, and price kind. Select source examples that expose several of
 those differences at once, and record the remaining coverage explicitly.
 
@@ -112,7 +108,7 @@ unmapped entries, uncertain associations, and failed interpretations. Do not
 silently drop entries or publish guessed fields as established facts. A failure
 in one entry must leave independently usable entries retrievable. First try a
 new source through the shared parser. Record a demonstrated gap that general preparation or parsing cannot handle;
-do not introduce a source-specific semantic adapter into this comparison. Change
+do not introduce a source-specific semantic adapter into this path. Change
 shared semantics when inspected information shows a real new requirement.
 
 ### Existing material to inspect for these shapes
@@ -171,13 +167,16 @@ Ingestion should:
 5. Apply the listing identity and rescrape rules below before publishing the
    information for agent queries.
 
-## Initial parser output target
+## Implemented extraction interface
 
-The parser needs a provisional structured-output schema before the first model
-call. The target is extracted information from the supplied content, checked
-against varied real inputs. It is not the final database schema or a complete
-hardware taxonomy. The following is the minimum semantic shape; exact field
-definitions and example records come from inspection of the initial captures.
+`models.py` defines one `Extraction`: a list of `Entry` records and source-level
+issues. Each entry has supplied `source_refs`, nullable title, description,
+native ID, variant ID, SKU, URL, seller, location, condition and availability.
+Prices are nested under their owning entry and retain exact decimal amount,
+nullable currency, original text, kind, basis and conditions. Source dates retain
+original field, value, meaning and object scope. Flexible JSON attributes retain
+useful native specifications, images, warranty and other heterogeneous fields.
+Entry issues preserve ambiguity, truncation and material omissions.
 
 | Part of the output | Information to represent |
 |---|---|
@@ -189,13 +188,12 @@ definitions and example records come from inspection of the initial captures.
 | Source dates | Dates stated in the supplied content, with their meaning, original text, and source references; unresolved meanings remain explicit |
 | Unresolved information | Ambiguous fields or associations, conflicts, and entries that could not be interpreted, retaining the relevant evidence |
 
-The executable names the common columns in `OfferFields`: seller, location,
-condition, availability, description, native_id, variant_id, intent, and url are
-string facts; available_quantity is an exact decimal fact. Missing source values
-remain null with unknown status. A vendor or manufacturer is not automatically a
-seller. Other source facts use `additional_facts`; item specifications remain on
-their items. Prices and source dates have separate typed collections so multiple
-amounts and different date meanings are preserved.
+The parser uses one PydanticAI typed-output conversation with at most one
+correction. Reference and optional locator checks establish structural validity,
+not factual completeness. Source bytes are retained before inference. The
+committed configuration selects one free OpenRouter model with reasoning enabled.
+Requests, replies and corrections are saved locally for inspection. Unsupported
+UTF-8 and oversized inputs are explicit outcomes rather than silently truncated.
 
 The result can contain zero, one, or many extracted entries. An empty item
 array needs a disposition, such as no offer present or interpretation failed;
@@ -398,39 +396,20 @@ hash establishes byte identity, not the source listing, collector event, or
 meaning of a timestamp. Record collection/record identity separately so a new
 unchanged scrape can be distinguished from reimporting the same scrape.
 
-Keep four meanings separate:
+The application assigns IDs and retains acquisition receipts independently of
+model output. Extracted records are immutable interpretations of those receipts.
+Reprocessing does not manufacture a new observation time. Entries are stored in
+named SQL columns; price amounts use exact PostgreSQL NUMERIC. Attributes and
+native date claims are structured JSONB. Each entry links to all contributing
+sources and optional native locators. Failed attempts remain inspectable.
 
-| Concept | Meaning |
-|---|---|
-| Capture | Immutable source bytes and provenance, including selected native fragments and parent references |
-| Observation | A distinct collection event, with established retrieval time if known, source identity evidence, and links to captured content |
-| Interpretation result | Immutable typed items, prices, facts/attributes, and relations produced under a recorded parser/configuration version from allowed evidence |
-| Acceptance | Whether a result is accepted for a particular experiment and parser arm, with validation/disposition information |
-
-Items, prices, and relationships belong to their immutable interpretation result.
-Do not update shared mutable item rows so that a later interpretation changes
-what an earlier experiment or observation meant. Acceptance is scoped by both
-experiment and arm; one candidate's accepted output must not become the other's
-result or satisfy its coverage. A revised interpretation is another result over
-existing evidence, without a fabricated observation or fresh market date.
-
-Publish a dependency-closed result atomically: every price scope, item reference,
-relation endpoint, and evidence reference must resolve inside the accepted
-result or its explicitly allowed captured evidence. An invalid dependent
-fragment cannot leak into accepted SQL views. Independently valid results may
-publish when another unit fails; retain both the success and failed disposition.
-Do not accept the entire batch merely because some outputs validate, or discard
-all useful results because an unrelated unit fails.
-
-Prices use exact PostgreSQL numeric values, with currency, original text, kind,
-purchase quantity, and explicit scope. Scope may be an item, variant, system,
-lot, or unresolved source group; a price without supported scope is not a
-component offer. Facts and extensible attributes remain structured JSONB with
-evidence references and justified units/normalization. Common SQL views expose
-items, facts/attributes, prices, relations, provenance, observations/history,
-unknowns, conflicts, and acceptance without requiring consumers to reconstruct
-the ingestion conversation. This is an access requirement, not a promise of
-particular table/view names before integration.
+The small implementation uses `ingest_*` tables and views. CLI query names are
+`entries`, `prices`, `current_entries`, `current_prices`, `history`, and `failures`.
+The first two expose stored interpretations and provenance; they are useful for
+inspection, including unknown-time or unresolved-identity evidence. Current
+views require native identity, trusted observation time and no reported issues.
+An empty issues list does not assert factual completeness. History retains
+observations; consumers must not count repeated sightings as independent offers.
 
 A trusted identity key can combine source, native listing, seller context, and
 variant where established. Collector/run identity does not split that listing.
@@ -455,41 +434,31 @@ dated price by default. Equal observation times with incompatible results are
 an explicit conflict, not a last-write-wins choice. SQL consumers must be able
 to retrieve the competing states and their evidence. A missing field in a
 partial scrape does not imply deletion, unavailability, or a changed price.
-The implemented current/change views select complete observations as whole states.
-A partial rerun cannot replace an accepted complete interpretation, and a newer
-partial sighting cannot advance the older complete state's freshness date. Its
-own date and extracted facts remain available separately. Equal-time identical
-states have one current representative while their source sightings remain.
+An issue-bearing interpretation must not silently advance an unqualified current
+state. Its own date and extracted facts remain available for inspection.
+Equal-time identical states have one current representative while source sightings
+remain. Revised interpretations and partial-source handling need explicit proof;
+an empty issues list alone is not a completeness guarantee.
 
-## Bounded comparison contract
+## Demonstration and limits
 
-The two candidates share typed output, validation, allowed capture bytes, and
-accounting. The staged candidate conditionally discovers layout, extracts
-batches, validates, and allows one correction per stage. The scoped tool loop
-uses only `list_children`, `read_region`, `read_regions`, and `search_capture` over the same package
-allowlist before producing the typed result. Neither candidate can read the
-independent expected-answer oracle. SQL consumer agents are separate from these
-parser candidates.
+Inspect native input, extraction and actual SQL reads together. Start with the
+two small native examples, then exercise a real multi-entry source and repeat
+scrapes. The oracle is review material, never parser input. Preserve frozen
+provenance and keep the holdout reserved. No overall score or model confidence
+number establishes correctness. Explicitly report omissions, unsupported claims,
+wrong price associations, date errors and provider failures.
 
-Apply every [shared package limit](plan.md#the-two-callable-candidates) across all
-stages, including correction and final-result generation. Report input units
-attempted, omitted, or stopped; paginated tool responses must explicitly expose
-continuation. No source or model-context truncation may hide missing entries.
-Record distinct and repeated prepared-view exposure, model/tool attempts, tokens, times,
-errors, and unsupported output. The comparison report checks expected facts,
-omissions, wrong associations, unsupported values, dates, and SQL results
-separately; it does not collapse them into a score or confidence number.
-View accounting conservatively charges overlapping indexed views separately; it
-does not claim exact original-source coverage or count SDK history retransmission.
-The [plan](plan.md#the-two-callable-candidates) defines the separate native-retention,
-prepared-input, view-exposure, request, and model-context limits.
+The former two-arm comparison is historical work, available in Git history;
+it does not govern this implementation. Large-document preparation, ingestion
+throughput and additional collector routes remain demonstrations to complete.
 
 ## Questions that evidence must resolve
 
 - Which selected native IDs, seller/variant contexts, and observation dates have established semantics, and which remain unresolved?
 - What does each provider timestamp mean? The eBay timestamp above remains provider-reported until independently verified.
 - Which complete selected fragments and context define safe content reuse, without losing meaningful changes?
-- Which expected facts and source associations actually survive both parser arms and SQL storage?
+- Which expected facts and source associations actually survive the parser and SQL storage?
 - Which intended ingestion volume is supported by the measured requests, bytes, tokens, and elapsed time? The bounded run alone does not establish collector-scale capacity.
 
 Real multi-item post and split-auction captures, verified retrieval-date
