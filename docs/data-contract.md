@@ -80,6 +80,9 @@ Use batched free-model interpretation for entries or fields whose meaning needs
 context. Structured source information can be mapped directly. Keep the original
 record available even when interpretation is partial or fails.
 
+Batching means multiple entries in each model request. Retry and recovery paths
+must preserve that requirement instead of falling back to one request per entry.
+
 Parsed fields need their source reference and parser version. Derived arithmetic
 and unit conversions should use the stated inputs and explicit rules. Parsing
 the same capture again may revise its interpretation; it must not manufacture
