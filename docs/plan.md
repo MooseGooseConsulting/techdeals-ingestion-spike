@@ -13,6 +13,11 @@ Other agents query the database and use the information in their own tasks.
 The first delivery is an ingestion pipeline and queryable database with
 documented data meanings. Its consumer requirements are composable retrieval,
 relationships, quantities, price scope, provenance, uncertainty, and history.
+Start with the actual scraped information: item, price, currency, location,
+seller, condition, availability, description, specifications, dates, and the
+remaining source fields. Retain the original record. Structured values can be
+mapped directly; batched LLM interpretation supplies usable information from
+fields that need it. Incomplete interpretation does not block basic intake.
 The owner's personal use of a query command or buying interface is not a
 requirement.
 
@@ -22,12 +27,78 @@ requirement.
 | [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–5 | Data retrieved by agents preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
 | [P3: price scope and cost apportionment](problems.md#p3-what-prices-cover-and-how-costs-are-apportioned) | First deliverable for stated purchase prices; cost apportionment extension for attributed costs | Amounts cover the correct purchases; justified allocations remain separately identified and traceable |
 | [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–5; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
-| [P5: source evidence, dates, and history](problems.md#p5-source-evidence-dates-and-history) | First deliverable for source traceability; continuity extension for repeated captures and interpretation changes | Agent query results retain source/time context and history without invented events, duplicated purchases, or moved prices |
+| [P5: source evidence, dates, and history](problems.md#p5-source-evidence-dates-and-history) | First deliverable, including the rescrape and identity cases below; broader continuity cases afterward | Ordinary queries deduplicate source listings; dated sightings, actual changes, and revised interpretations remain distinguishable |
 | [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–5; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
 | [P7: developing categories](problems.md#p7-categories-that-develop-with-the-information) | Broader information and categories extension | New meaningful categories can be represented and queried with their relevant attributes and relationships |
 
 All seven problems remain open. The sequence below is proposed; the selection
 of examples and the size of the first slice have not been settled with the owner.
+
+## Dates, identity, and rescrapes in the first delivery
+
+Specify these behaviors before finalizing tables or the scraper output. The
+distinctions below describe required behavior, not a prescribed table count.
+
+- **Listing identity:** use a stable source/native listing identifier, with
+  variant or other source context where it distinguishes separately priced
+  entries. Price and scrape time do not define the listing's identity. A URL
+  fallback needs explicit source-specific rules that preserve meaningful
+  variant parameters. Matching the same hardware model across sellers is a
+  separate task and must not collapse their listings.
+- **Scrape identity:** identify the collection and its record independently of
+  the listing. Reimporting or retrying the same captured result is idempotent.
+- **Stored content:** reuse unchanged listing information and retain when it
+  was seen. Choose whether compact sightings or first/last-seen intervals meet
+  the required history; do not require another complete listing copy on each
+  check. Keep source evidence retrievable. A fingerprint used for content reuse
+  must exclude changing collection metadata such as run IDs and scrape times;
+  it must not discard meaningful item, price, location, or other source fields.
+- **Dates:** map each scraper's actual date fields to their established meanings.
+  The inspected eBay record `127932828201` contains
+  `timestamp: 2026-10-06T02:22:34.880Z`; preserve that provider timestamp and
+  confirm its semantics before treating it as the retrieval time. Delivery
+  estimates and listing update dates remain separate. New collections should
+  provide explicit retrieval times; importing an old result does not refresh it.
+- **Agent queries:** expose a clear current-listing read path with one result
+  per source listing/variant, its observation date, and freshness. Expose dated
+  changes separately. Counting scrapes must not inflate item counts or the
+  number of independent price examples. Late-arriving old scrapes must not
+  overwrite newer source state simply because they were imported later.
+
+| Case | Required behavior |
+|---|---|
+| Same captured result imported twice, including a retry | No duplicate listing, state, or sighting |
+| Same source listing discovered by overlapping searches or different collectors | Recognize its source listing identity; do not create another item because the discovery route differs |
+| New scrape, same listing information | Same listing and content; retain the later successful sighting and freshness |
+| New scrape, price changes | Same listing; preserve old and new amounts with their actual observation times |
+| Price returns to an earlier amount | Preserve the chronological change back; content reuse must not erase it |
+| Stock, location, specifications, or other fields change while price stays the same | Preserve the changed source information without claiming the price changed |
+| Same model offered by different sellers | Distinct source listings; no identity merge based on model alone |
+| Old scrape arrives after a newer one | Preserve history without regressing the current known state |
+| Parser reruns against existing evidence | Retain revised interpretation separately; no fabricated new scrape or observation date |
+
+Verify the deduplication keys and database constraints with repeated and
+concurrent imports. An incomplete scrape must have an explicit disposition; a
+missing field does not by itself establish a real deletion or stock change.
+
+## Scraper output is part of the design
+
+Inspect what existing collectors already supply and shape the intake around the
+actual source data. Where an output is missing necessary fields or has unclear
+time/identity semantics, consider a targeted change or a custom Bright Data
+scraper. The owner explicitly identified this option; existing output formats
+are not immutable. Bright Data's [Scraper Studio](https://docs.brightdata.com/datasets/scraper-studio/faqs)
+supports building custom scrapers.
+
+Specify stable listing and variant IDs where supplied by the site, source URL,
+per-record retrieval time, collection/record identity, and the complete useful
+scraped fields. Keep collection metadata separate from listing content so that
+deduplication can distinguish a new visit from a changed item. Retain original
+text and source-specific fields alongside normalized values. LLM parsing is for
+interpretation the source output does not already provide directly.
+
+Choosing or changing a collector is proposed work. No scraper, paid collection,
+or production schedule has been created or changed by this plan.
 
 ## First deliverable: one useful, executable slice
 
@@ -82,7 +153,8 @@ of examples and the size of the first slice have not been settled with the owner
    must remain retrievable without inventing a dated price or stock observation.
 
    Done when ingestion runs against the scratch database and actual agent query
-   results match the inspected source meaning, including the excluded matches.
+   results match the inspected source meaning, including the excluded matches,
+   and the date, identity, and rescrape cases above behave as specified.
 
 5. **Verify consumption through agent queries.** Use the documented database
    structure to retrieve and relate the stored information, including quantities,
@@ -102,12 +174,11 @@ of examples and the size of the first slice have not been settled with the owner
 After the first working delivery, extend the implementation in this order. Keep
 each extension small enough to demonstrate through the same agent query path.
 
-1. **Continuity and real changes.** Reprocess the same capture, reorder model
-   output, interrupt/retry a batch, and use another real capture of the same
-   source offer. Preserve past interpretations and prices without duplicating
-   purchases or attaching a price to a different component. Distinguish an
-   interpretation change from a real price/availability change. Include known
-   unavailable and unknown-availability cases in the returned answers.
+1. **Broader continuity cases.** Extend the first delivery's identity and
+   deduplication behavior to more source shapes, reordered model output,
+   interrupted batches, and configuration changes. Preserve past interpretations
+   and source history without duplicating listings or moving prices to different
+   items. Include known unavailable and unknown-availability cases.
 2. **Broader information and categories.** Add genuinely different source and
    hardware shapes, configuration choices, units, currencies, and price kinds.
    Show that a new meaningful category can be represented and queried without
@@ -146,5 +217,5 @@ wholesale, and finishing the spike does not require polishing every prototype.
 Keep the problem statement and implementation plan aligned as decisions develop.
 Add source, examples, dependencies, and focused checks as the working slice needs
 them. Scoring systems, confidence numbers, rankings, generic evaluation tooling,
-bulk legacy imports, new collectors, and production deployment are outside the
+bulk legacy imports, and production deployment are outside the
 initial slice. Task progress and review replies belong in issues and PR threads.

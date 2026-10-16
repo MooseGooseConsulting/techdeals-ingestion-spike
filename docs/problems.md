@@ -8,6 +8,11 @@ discussed with the owner. It is not a claim that they have been solved.
 We have heterogeneous hardware information that needs to become useful for
 sorting, querying, tallying, and buying analysis by other agents.
 
+The basic job is to retain the scraped item, prices, currency, location, seller,
+condition, availability, descriptions, specifications, dates, and other source
+information in a database. Parsing makes messy fields usable; a complete
+component interpretation is not a prerequisite for storing the scraped record.
+
 The difficult part is preserving its meaning from the original source through
 to the data retrieved by a consuming agent. The intended result is a functioning
 ingestion pipeline and database whose demonstrated improvements can enhance
@@ -86,11 +91,29 @@ Every selected fact or price needs a traceable source. Fetch time, publication
 time, import time, and the time a price was observed describe different events.
 Reinterpreting a capture is also different from observing a real market change.
 
+Rescraping a listing must not create another item or repeat the same information
+in ordinary query results. An unchanged scrape confirms that the listing was
+seen again. A changed price, location, specification, availability, or other
+source value needs history. Reimporting the same scrape is a retry, not another
+sighting. Different sellers offering the same model are distinct listings.
+
+An item priced at $1,640, then $1,590, then $1,640 has three chronological price
+states. The return to $1,640 must survive deduplication even though that value
+appeared before. Repeated sightings must not become independent items or price
+samples in aggregations.
+
 **Required result:** agent queries expose the supporting source and known
 time context. Missing dates stay unknown. Repeated captures and revised
 interpretations preserve price and availability history without duplicating
 purchases or attaching old prices to different components. Consuming agents can
 distinguish historical evidence, current observations, and unavailable or unknown inventory.
+
+Ordinary listing queries expose each source listing/variant once with its latest
+known state and observation date. Historical queries expose actual changes and
+their dates. Unchanged sightings retain freshness without duplicating the full
+listing information. Reprocessing an old scrape changes its interpretation, not
+its observation date. Source timestamp meanings must be established per scraper;
+import time never substitutes for scrape time.
 
 ## P6. Useful incomplete information and visible failures
 
@@ -116,8 +139,10 @@ schema or forcing unlike configurations into the same comparison.
 
 ## Working boundaries
 
-Use batched free-model parsing. Work with the existing scrapers' captured
-evidence; broad legacy migration waits until the new path works. Development
+Use batched free-model parsing. Existing captured evidence provides the starting
+material. The scraper output can also be improved, including with a custom
+Bright Data scraper, to supply the fields and collection metadata we need.
+Broad legacy migration waits until the new path works. Development
 must protect the existing cluster and production data. Production incorporation
 follows demonstration of useful behavior and review of the affected consumers
 and history.
