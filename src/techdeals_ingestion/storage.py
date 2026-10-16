@@ -15,7 +15,7 @@ from .contracts import ParseBatchResult, prepare_units
 from .validation import require_valid_result
 
 VIEWS = frozenset({'current_listings', 'current_items', 'current_prices', 'listing_sightings',
-                   'listing_changes', 'undated_evidence', 'unresolved_entries'})
+                   'listing_changes', 'undated_evidence', 'unresolved_entries', 'ingestion_failures'})
 
 
 def digest(value):
@@ -94,10 +94,11 @@ class Store:
         with self.connect() as conn:
             for unit in units:
                 key = semantic_key(package, unit, parser_fingerprint)
-                prior = conn.execute('''SELECT * FROM interpretations WHERE semantic_key=%s
-                    AND experiment_id=%s AND arm=%s AND parser_fingerprint=%s
-                    ORDER BY result_id LIMIT 1''', (key, experiment_id, arm, parser_fingerprint)).fetchone()
-                if not prior or prior['payload']['status'] not in ('complete', 'partial', 'no_offer'):
+                prior = conn.execute('''SELECT i.* FROM interpretations i JOIN accepted a ON a.result_id=i.result_id
+                    WHERE semantic_key=%s AND i.experiment_id=%s AND i.arm=%s
+                    AND parser_fingerprint=%s AND i.payload->>'status' IN ('complete','no_offer')
+                    ORDER BY (i.payload->>'status'='complete') DESC, i.result_id LIMIT 1''', (key, experiment_id, arm, parser_fingerprint)).fetchone()
+                if not prior or prior['payload']['status'] not in ('complete', 'no_offer'):
                     return None
                 old_ids = prior['input_capture_ids']
                 new_ids = [r.capture_id for r in unit.input_refs]
@@ -149,48 +150,77 @@ class Store:
                 VALUES (%s,%s,%s,%s,%s,%s)''', (attempt_key, package.package_id, experiment_id,
                 arm, Jsonb(result.model_dump(mode='json')), Jsonb(errors)))
             for unit in valid:
-                cs = [captures[r.capture_id] for r in expected[unit.unit_id].input_refs]
-                dates = {c.retrieved_at for c in cs}
-                observed_at = next(iter(dates)) if len(dates) == 1 else None
-                time_status = 'known' if observed_at else ('conflicting' if len(dates) > 1 else 'unknown')
-                refs = sorted([[captures[r.capture_id].acquisition_key, r.locator]
-                               for r in expected[unit.unit_id].input_refs])
-                observation = digest(refs)
-                conn.execute('INSERT INTO observations VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',
-                             (observation, Jsonb([c.acquisition_key for c in cs]), Jsonb(refs),
-                              observed_at, time_status))
-                key = semantic_key(package, expected[unit.unit_id], parser_fingerprint)
-                rid = uuid4().hex
-                conn.execute('''INSERT INTO interpretations VALUES
-                    (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
-                    (rid, observation, attempt_key, experiment_id, arm, unit.unit_id, key,
-                     parser_fingerprint, Jsonb(unit.model_dump(mode='json')),
-                     Jsonb([c.capture_id for c in cs]),
-                     self._reuse_sources.get((package.package_id, unit.unit_id, key))))
-                for offer in unit.offers:
-                    listing = self._listing(conn, offer, captures)
-                    conn.execute('INSERT INTO offers VALUES (%s,%s,%s,%s,%s,%s,%s)',
-                                 (rid, offer.local_id, listing, offer.title,
-                                  Jsonb({k: v.model_dump(mode='json') for k, v in offer.fields.items()}),
-                                  Jsonb(offer.model_dump(mode='json')),
-                                  Jsonb(_meaning(offer.model_dump(mode='json')))))
-                    for item in offer.items:
-                        conn.execute('INSERT INTO items VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
-                                     (rid, item.local_id, offer.local_id, item.title, item.role,
-                                      item.quantity, Jsonb({k: v.model_dump(mode='json') for k, v in item.attributes.items()}),
-                                      Jsonb(item.model_dump(mode='json'))))
-                    for p in offer.prices:
-                        conn.execute('INSERT INTO prices VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                                     (rid, p.local_id, offer.local_id, p.amount, p.currency, p.kind,
-                                      p.quantity, Jsonb(p.scope_refs), Jsonb(p.model_dump(mode='json'))))
-                    for ordinal, relation in enumerate(offer.relations):
-                        conn.execute('INSERT INTO relations VALUES (%s,%s,%s,%s)',
-                                     (rid, offer.local_id, ordinal, Jsonb(relation.model_dump(mode='json'))))
-                conn.execute('''INSERT INTO accepted VALUES (%s,%s,%s,%s)
-                    ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id''',
-                    (observation, experiment_id, arm, rid))
-                report['published_units'] += 1
+                try:
+                    with conn.transaction():
+                        cs = [captures[r.capture_id] for r in expected[unit.unit_id].input_refs]
+                        dates = {c.retrieved_at for c in cs}
+                        observed_at = next(iter(dates)) if len(dates) == 1 else None
+                        time_status = 'known' if observed_at else ('conflicting' if len(dates) > 1 else 'unknown')
+                        refs = sorted([[captures[r.capture_id].acquisition_key, r.locator]
+                                       for r in expected[unit.unit_id].input_refs])
+                        observation = digest(refs)
+                        conn.execute('INSERT INTO observations VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',
+                                     (observation, Jsonb([c.acquisition_key for c in cs]), Jsonb(refs),
+                                      observed_at, time_status))
+                        key = semantic_key(package, expected[unit.unit_id], parser_fingerprint)
+                        rid = uuid4().hex
+                        conn.execute('''INSERT INTO interpretations VALUES
+                            (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+                            (rid, observation, attempt_key, experiment_id, arm, unit.unit_id, key,
+                             parser_fingerprint, Jsonb(unit.model_dump(mode='json')),
+                             Jsonb([c.capture_id for c in cs]),
+                             self._reuse_sources.get((package.package_id, unit.unit_id, key))))
+                        for offer in unit.offers:
+                            listing = self._listing(conn, offer, captures)
+                            conn.execute('INSERT INTO offers VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                                         (rid, offer.local_id, listing, offer.title,
+                                          Jsonb({k: v.model_dump(mode='json') for k, v in offer.fields.items()}),
+                                          Jsonb(offer.model_dump(mode='json')),
+                                          Jsonb(_meaning(offer.model_dump(mode='json')))))
+                            for item in offer.items:
+                                conn.execute('INSERT INTO items VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
+                                             (rid, item.local_id, offer.local_id, item.title, item.role,
+                                              item.quantity, Jsonb({k: v.model_dump(mode='json') for k, v in item.attributes.items()}),
+                                              Jsonb(item.model_dump(mode='json'))))
+                            for p in offer.prices:
+                                conn.execute('INSERT INTO prices VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                                             (rid, p.local_id, offer.local_id, p.amount, p.currency, p.kind,
+                                              p.quantity, Jsonb(p.scope_refs), Jsonb(p.model_dump(mode='json'))))
+                            for ordinal, relation in enumerate(offer.relations):
+                                conn.execute('INSERT INTO relations VALUES (%s,%s,%s,%s)',
+                                             (rid, offer.local_id, ordinal, Jsonb(relation.model_dump(mode='json'))))
+                        conn.execute('''INSERT INTO accepted VALUES (%s,%s,%s,%s)
+                            ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id''',
+                            (observation, experiment_id, arm, rid))
+                        report['published_units'] += 1
+                except (psycopg.Error, ValueError) as exc:
+                    errors.append({'unit_id': unit.unit_id, 'error': str(exc)})
+            conn.execute('UPDATE attempts SET errors=%s WHERE attempt_key=%s',
+                         (Jsonb(errors), attempt_key))
         return report
+
+    def record_failure(self, package, experiment_id, arm, attempt_key, reason):
+        """Retain preparation failures without requiring a successfully built evidence index."""
+        self.retain_package(package)
+        payload = ParseBatchResult(batch_id=attempt_key, units=[
+            {'unit_id': u.unit_id, 'input_refs': u.input_refs, 'status': 'failed',
+             'issues': [str(reason)]} for u in prepare_units(package)])
+        errors = [{'unit_id': u.unit_id, 'error': str(reason)} for u in payload.units]
+        with self.connect() as conn:
+            existing = conn.execute('SELECT * FROM attempts WHERE attempt_key=%s',
+                                    (attempt_key,)).fetchone()
+            if existing:
+                if (existing['package_id'] != package.package_id or
+                    existing['experiment_id'] != experiment_id or existing['arm'] != arm or
+                    existing['result'] != payload.model_dump(mode='json') or
+                    existing['errors'] != errors):
+                    raise ValueError('attempt_key collision')
+            else:
+                conn.execute('INSERT INTO attempts(attempt_key,package_id,experiment_id,arm,result,errors) '
+                             'VALUES (%s,%s,%s,%s,%s,%s)',
+                             (attempt_key, package.package_id, experiment_id, arm,
+                              Jsonb(payload.model_dump(mode='json')), Jsonb(errors)))
+        return {'attempt_key': attempt_key, 'published_units': 0, 'errors': errors}
 
     def _listing(self, conn, offer, captures):
         identities = set()
