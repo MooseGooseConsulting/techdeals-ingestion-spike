@@ -114,11 +114,10 @@ def validate_result(
                 for key, fact in item.attributes.items():
                     require_fact_evidence(fact, offer_path + "/items/" + item.local_id + "/" + key)
             for price in offer.prices:
-                if price.amount is not None:
-                    if not price.evidence:
-                        issue("missing_price_evidence", offer_path, price.local_id)
-                    if not price.scope_refs:
-                        issue("missing_price_scope", offer_path, price.local_id)
+                if not price.evidence:
+                    issue("missing_price_evidence", offer_path, price.local_id)
+                if not price.scope_refs:
+                    issue("missing_price_scope", offer_path, price.local_id)
                 for condition in price.conditions:
                     require_fact_evidence(condition, offer_path + "/prices/" + price.local_id)
                 for ref in price.scope_refs:

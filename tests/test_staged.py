@@ -346,3 +346,52 @@ def test_prepared_budget_counts_repeated_views_and_discovery_previews():
     with pytest.raises(ValueError, match="exposure limit"):
         budget.reserve([{"text": "x" * 100}])
     assert budget.total_bytes == size * 2
+
+
+@pytest.mark.asyncio
+async def test_batch_id_envelope_is_counted_when_splitting_packs(tmp_path):
+    from techdeals_ingestion.contracts import prepare_units
+    from techdeals_ingestion.settings import ParserSettings
+    from techdeals_ingestion.staged import _payload, _prepare, _size
+
+    p, index = package(tmp_path, count=2, text="x" * 2000)
+    p.package_id = "batch-" + "x" * 500
+    views = [_prepare(unit, index) for unit in prepare_units(p)]
+    full = _payload(views, p.package_id)
+    without_id = {key: value for key, value in full.items() if key != "batch_id"}
+    limit = _size(without_id) + 1
+    assert _size(full) > limit
+    assert all(_size(_payload([view], p.package_id)) <= limit for view in views)
+    session = Session()
+    session.settings = ParserSettings.load().model_copy(update={"max_prepared_bytes": limit})
+    result = await parse_batch(p, index, session)
+    assert [len(call[1]["units"]) for call in session.calls] == [1, 1]
+    assert all(call[2] <= limit for call in session.calls)
+    assert all(unit.status == "no_offer" for unit in result.units)
+
+
+@pytest.mark.asyncio
+async def test_single_unit_over_limit_with_envelope_fails_before_extraction(tmp_path, monkeypatch):
+    from techdeals_ingestion.contracts import prepare_units
+    from techdeals_ingestion.settings import ParserSettings
+    from techdeals_ingestion.staged import _payload, _prepare, _size
+
+    p, index = package(tmp_path)
+    p.package_id = "batch-" + "x" * 500
+    view = _prepare(prepare_units(p)[0], index)
+    full = _payload([view], p.package_id)
+    limit = _size({key: value for key, value in full.items() if key != "batch_id"}) + 1
+    discoveries = []
+
+    async def discover(view, index, session, exposure):
+        discoveries.append(view)
+        return [view]
+
+    monkeypatch.setattr("techdeals_ingestion.staged._discover", discover)
+    session = Session()
+    session.settings = ParserSettings.load().model_copy(update={"max_prepared_bytes": limit})
+    result = await parse_batch(p, index, session)
+    assert len(discoveries) == 1
+    assert session.calls == []
+    assert result.units[0].status == "failed"
+    assert "exceeds extraction limit; no truncation" in result.units[0].issues[0]

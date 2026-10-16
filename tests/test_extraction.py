@@ -136,3 +136,58 @@ async def test_same_run_correction_can_improve_a_previous_incomplete_unit(tmp_pa
     output = await parse_direct(p, index, session)
     assert [unit.status for unit in output.units] == ["no_offer", "no_offer"]
     assert session.runs == 1 and len(calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("revision", ["no_offer", "different_price"])
+async def test_repair_does_not_rewrite_a_previously_complete_unit(tmp_path, revision):
+    from techdeals_ingestion.contracts import Offer, Price
+
+    p, index = package(tmp_path, count=2)
+    units = prepare_units(p)
+    calls = []
+
+    def respond(messages, info):
+        calls.append(1)
+        changed = len(calls) > 1
+        output_units = [
+            UnitResult(
+                unit_id=units[0].unit_id,
+                input_refs=units[0].input_refs,
+                status="no_offer" if changed and revision == "no_offer" else "complete",
+                offers=[]
+                if changed and revision == "no_offer"
+                else [
+                    Offer(
+                        local_id="offer",
+                        evidence=units[0].input_refs,
+                        prices=[
+                            Price(
+                                local_id="price",
+                                amount="20" if changed else "10",
+                                kind="ask",
+                                scope_refs=["offer"],
+                                evidence=units[0].input_refs,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ]
+        if changed:
+            output_units.append(
+                UnitResult(
+                    unit_id=units[1].unit_id,
+                    input_refs=units[1].input_refs,
+                    status="no_offer",
+                )
+            )
+        output = ParseBatchResult(batch_id="p", units=output_units)
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output.model_dump())])
+
+    session = Session(respond)
+    output = await parse_direct(p, index, session)
+    assert output.units[0].status == "complete"
+    assert output.units[0].offers[0].prices[0].amount == 10
+    assert output.units[1].status == "no_offer"
+    assert session.runs == 1 and len(calls) == 2

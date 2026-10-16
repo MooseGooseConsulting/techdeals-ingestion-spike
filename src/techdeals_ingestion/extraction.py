@@ -26,10 +26,7 @@ async def run_validated(session, agent, prompt, units, index, batch_id, deps=Non
                 unit = matches[0]
                 prior = accepted.get(expected.unit_id)
                 if prior is not None:
-                    if prior.status in ("complete", "no_offer") and unit.status in (
-                        "partial",
-                        "failed",
-                    ):
+                    if prior.status in ("complete", "no_offer"):
                         continue
                     if prior.status == "partial" and unit.status == "failed":
                         continue

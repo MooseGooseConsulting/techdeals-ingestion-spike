@@ -44,7 +44,12 @@ def trial_rows(store, attempt, experiment, arm):
             "SELECT * FROM prices WHERE result_id=ANY(%s)",
             ([row["result_id"] for row in rows],),
         ).fetchall()
-    return rows, prices
+        outcomes = connection.execute(
+            """SELECT o.* FROM ingestion_outcomes o JOIN interpretations i USING(result_id)
+            WHERE i.attempt_key=%s AND i.experiment_id=%s AND i.arm=%s""",
+            (attempt, experiment, arm),
+        ).fetchall()
+    return rows, prices, outcomes
 
 
 def parser_fingerprint(settings, arm, direct=False):
@@ -145,9 +150,10 @@ async def run_package(args):
             for u in result.units
         ]
         (destination / "result.json").write_text(result.model_dump_json(indent=2) + "\n")
-        rows, price_rows = trial_rows(store, attempt, args.experiment, args.arm)
+        rows, price_rows, outcomes = trial_rows(store, attempt, args.experiment, args.arm)
         (destination / "database-rows.json").write_text(_json(rows))
         (destination / "database-prices.json").write_text(_json(price_rows))
+        (destination / "database-outcomes.json").write_text(_json(outcomes))
         current = store.query("current_listings", experiment_id=args.experiment, arm=args.arm)
         (destination / "database-current.json").write_text(_json(current))
         report["database_rows"] = len(rows)
@@ -284,6 +290,7 @@ def main():
                 read_saved("database-rows.json"),
                 read_saved("database-prices.json"),
                 read_saved("database-current.json"),
+                outcomes=read_saved("database-outcomes.json"),
             )
         destination = Path(args.output)
         destination.parent.mkdir(parents=True, exist_ok=True)

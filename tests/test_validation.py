@@ -59,7 +59,14 @@ def test_scope_and_resolution(tmp_path):
                     "evidence": [{"capture_id": "b", "locator": "$"}],
                 }
             },
-            "prices": [{"local_id": "p", "kind": "ask", "scope_refs": ["missing"]}],
+            "prices": [
+                {
+                    "local_id": "p",
+                    "kind": "ask",
+                    "scope_refs": ["missing"],
+                    "evidence": [{"capture_id": "a", "locator": "$"}],
+                }
+            ],
             "relations": [{"subject_ref": "o", "predicate": "contains", "object_ref": "missing"}],
         }
     ]
@@ -292,3 +299,40 @@ def test_empty_extraction_requires_explicit_disposition(tmp_path, status):
     issues = validate_result(result, units, index)
     assert {i.code for i in issues} == ({"invalid_disposition"} if status == "complete" else set())
     assert result.units[0].status == status
+
+
+@pytest.mark.parametrize(
+    ("evidence", "scope", "expected"),
+    [
+        (True, True, set()),
+        (False, True, {"missing_price_evidence"}),
+        (True, False, {"missing_price_scope"}),
+        (False, False, {"missing_price_evidence", "missing_price_scope"}),
+    ],
+)
+def test_unknown_negotiable_price_still_requires_evidence_and_scope(
+    tmp_path, evidence, scope, expected
+):
+    units, index = setup(tmp_path)
+    a = unit("a")
+    a["offers"] = [
+        {
+            "local_id": "o",
+            "prices": [
+                {
+                    "local_id": "p",
+                    "kind": "negotiable",
+                    "amount": None,
+                    "original": "Contact seller for price",
+                    "evidence": [{"capture_id": "a", "locator": "$"}] if evidence else [],
+                    "scope_refs": ["o"] if scope else [],
+                }
+            ],
+        }
+    ]
+    result = ParseBatchResult(batch_id="x", units=[a, unit("b")])
+    assert {issue.code for issue in validate_result(result, units, index)} == expected
+    price = result.units[0].offers[0].prices[0]
+    assert price.amount is None
+    assert bool(price.evidence) == evidence
+    assert bool(price.scope_refs) == scope

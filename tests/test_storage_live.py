@@ -670,3 +670,76 @@ def test_package_reuse_provenance_is_atomic_and_consumed(store, tmp_path):
     # The earlier successful batch is also one-shot, after another publish consumes state.
     rows = publish(complete, reused, "again")
     assert len(rows) == 2 and all(row["reused_from"] is None for row in rows)
+
+
+def test_no_offer_correction_replaces_complete_same_observation(store, tmp_path):
+    token = uuid4().hex
+    path = tmp_path / "source"
+    path.write_text("An ambiguous server mention")
+    capture = CaptureInput(
+        capture_id=token,
+        acquisition_key=token,
+        path=path,
+        media_type="text/plain",
+        source_namespace="test",
+        retrieved_at=datetime(2026, 1, 2, tzinfo=UTC),
+        metadata={"identity_bindings": {"$": {"confirmed": True, "native_id": token}}},
+    )
+    package = WorkPackage(package_id=token, captures=[capture])
+    ref = EvidenceRef(capture_id=token, locator="$")
+    unit = UnitResult(
+        unit_id=token,
+        input_refs=[ref],
+        status="complete",
+        offers=[
+            Offer(
+                local_id="offer",
+                title="Server",
+                evidence=[ref],
+                prices=[
+                    Price(
+                        local_id="price",
+                        amount=Decimal(100),
+                        kind="ask",
+                        scope_refs=["offer"],
+                        evidence=[ref],
+                    )
+                ],
+            )
+        ],
+    )
+
+    def publish(suffix):
+        return store.publish(
+            package,
+            ParseBatchResult(batch_id=token + suffix, units=[unit]),
+            EvidenceIndex([capture]),
+            token,
+            "a",
+            token + suffix,
+            parser_fingerprint=suffix,
+        )
+
+    assert publish("complete")["published_units"] == 1
+    assert len(store.query("current_prices", experiment_id=token)) == 1
+    unit.status = "no_offer"
+    unit.offers = []
+    unit.issues = ["Correction: source does not offer this server"]
+    assert publish("correction")["published_units"] == 1
+    assert not store.query("listing_sightings", experiment_id=token)
+    assert not store.query("current_listings", experiment_id=token)
+    assert not store.query("current_prices", experiment_id=token)
+    outcome = store.query("ingestion_outcomes", experiment_id=token)[0]
+    assert outcome["status"] == "no_offer"
+    assert outcome["unit_payload"]["issues"] == unit.issues
+    assert outcome["observed_at"] == capture.retrieved_at
+    with store.connect() as conn:
+        rows = conn.execute(
+            "SELECT payload->>'status' AS status FROM interpretations WHERE experiment_id=%s",
+            (token,),
+        ).fetchall()
+    assert sorted(row["status"] for row in rows) == ["complete", "no_offer"]
+    unit.status = "partial"
+    unit.issues = ["Incomplete rerun"]
+    publish("partial")
+    assert store.query("ingestion_outcomes", experiment_id=token)[0] == outcome

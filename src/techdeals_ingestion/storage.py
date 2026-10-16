@@ -420,15 +420,15 @@ class Store:
                                         Jsonb(relation.model_dump(mode="json")),
                                     ),
                                 )
-                        # Retain every interpretation, but a partial rerun cannot erase
-                        # a complete selection for the same collection event.
+                        # Terminal corrections may revise the selected interpretation.
+                        # A partial rerun cannot erase a complete/no-offer selection.
                         conn.execute(
                             """INSERT INTO accepted VALUES (%s,%s,%s,%s)
                             ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id
-                            WHERE %s = 'complete' OR NOT EXISTS (
+                            WHERE %s IN ('complete','no_offer') OR NOT EXISTS (
                                 SELECT 1 FROM interpretations selected
                                 WHERE selected.result_id=accepted.result_id
-                                AND selected.payload->>'status'='complete')""",
+                                AND selected.payload->>'status' IN ('complete','no_offer'))""",
                             (observation, experiment_id, arm, rid, unit.status),
                         )
                         report["published_units"] += 1

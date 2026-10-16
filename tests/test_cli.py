@@ -90,7 +90,7 @@ def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
     store = Store(dsn)
     store.migrate()
     experiment = uuid4().hex
-    for number in (1, 2):
+    for number in (1, 2, 3):
         cid = experiment + str(number)
         source = tmp_path / cid
         source.write_text(f"Item {number}")
@@ -109,8 +109,11 @@ def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
                 UnitResult(
                     unit_id="same-unit",
                     input_refs=[ref],
-                    status="complete",
-                    offers=[
+                    status="no_offer" if number == 3 else "complete",
+                    issues=["No offer present"] if number == 3 else [],
+                    offers=[]
+                    if number == 3
+                    else [
                         Offer(
                             local_id="offer",
                             title=f"Item {number}",
@@ -131,9 +134,21 @@ def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
         )
         store.publish(package, result, EvidenceIndex([capture]), experiment, "test", cid)
     assert len(store.query("listing_sightings", experiment_id=experiment, arm="test")) == 2
-    rows, prices = cli.trial_rows(store, experiment + "2", experiment, "test")
+    rows, prices, outcomes = cli.trial_rows(store, experiment + "2", experiment, "test")
     assert [row["title"] for row in rows] == ["Item 2"]
     assert [price["amount"] for price in prices] == [Decimal(2)]
+    assert len(outcomes) == 1 and outcomes[0]["status"] == "complete"
+    rows, prices, outcomes = cli.trial_rows(store, experiment + "3", experiment, "test")
+    assert rows == prices == []
+    assert len(outcomes) == 1
+    assert outcomes[0]["status"] == "no_offer"
+    assert outcomes[0]["unit_payload"] == result.units[0].model_dump(mode="json")
+    from techdeals_ingestion.evaluate import evaluate_persisted
+
+    report = evaluate_persisted(result, rows, prices, outcomes=outcomes)
+    unit_check = report["checks"][-1]
+    assert unit_check["status"] == "pass"
+    assert unit_check["source"] == "ingestion_outcomes.unit_payload"
 
 
 async def test_published_partial_unit_is_reported_as_incomplete(tmp_path, monkeypatch):
@@ -202,3 +217,4 @@ async def test_published_partial_unit_is_reported_as_incomplete(tmp_path, monkey
     summary = json.loads((tmp_path / "trial/summary.json").read_text())
     assert summary["publication"] == {"published_units": 1, "errors": []}
     assert summary["status"] == "completed_with_failures"
+    assert json.loads((tmp_path / "trial/database-outcomes.json").read_text()) == []

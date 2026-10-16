@@ -143,3 +143,38 @@ def test_identity_match_uses_named_identity_column(tmp_path):
         ]
         == "fail"
     )
+
+
+def test_no_offer_outcome_artifact_distinguishes_missing_from_verified(tmp_path):
+    _, _, result = fixture(tmp_path)
+    unit = result.units[0]
+    unit.status = "no_offer"
+    unit.offers = []
+    unit.issues = ["Wanted post, no sale offer"]
+    outcome = {
+        "unit_id": unit.unit_id,
+        "status": unit.status,
+        "unit_payload": unit.model_dump(mode="json"),
+    }
+    assert evaluate_persisted(result, [])["checks"][-1]["status"] == "not_attempted"
+    assert evaluate_persisted(result, [], outcomes=[])["checks"][-1]["status"] == "fail"
+    report = evaluate_persisted(result, [], outcomes=[outcome])
+    assert report["checks"][-1]["status"] == "pass"
+    json.dumps(report)
+    outcome["unit_payload"]["issues"] = []
+    assert evaluate_persisted(result, [], outcomes=[outcome])["checks"][-1]["status"] == "fail"
+
+
+def test_outcome_roundtrip_rejects_unaccepted_partial_and_duplicate_units(tmp_path):
+    _, _, result = fixture(tmp_path)
+    unit = result.units[0]
+    unit.status = "partial"
+    unit.issues = ["Incomplete"]
+    complete = unit.model_dump(mode="json")
+    complete["status"] = "complete"
+    outcome = {"unit_id": unit.unit_id, "status": "complete", "unit_payload": complete}
+    for outcomes in ([], [outcome], [outcome, outcome]):
+        assert evaluate_persisted(result, [], outcomes=outcomes)["checks"][-1]["status"] == "fail"
+    unit.status = "failed"
+    unit.offers = []
+    assert evaluate_persisted(result, [], outcomes=[])["checks"][-1]["status"] == "not_attempted"

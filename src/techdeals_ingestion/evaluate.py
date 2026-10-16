@@ -179,12 +179,18 @@ def evaluate(result: ParseBatchResult, package: WorkPackage, oracle_path) -> dic
 
 
 def evaluate_persisted(
-    result: ParseBatchResult, listing_sightings, price_rows=None, current_listings=None
+    result: ParseBatchResult,
+    listing_sightings,
+    price_rows=None,
+    current_listings=None,
+    outcomes=None,
 ) -> dict:
     """Compare Store.query rows filtered to this attempt/experiment and arm.
 
     Include SQL prices to test NUMERIC storage, and current_listings to test date
-    gating. A listing_sightings JSON payload alone cannot establish either.
+    gating. Accepted outcomes establish dispositions even for no-offer units.
+    Failed units are recorded as attempts, outside this accepted-outcome check.
+    Missing optional artifacts remain not_attempted.
     """
     rows = list(listing_sightings)
     checks = []
@@ -263,20 +269,37 @@ def evaluate_persisted(
             )
         )
     for unit in result.units:
-        unit_rows = [r for r in rows if r["unit_id"] == unit.unit_id]
-        payloads = [r.get("unit_payload") for r in unit_rows]
-        if not payloads or any(p is None for p in payloads):
-            status = "not_attempted"
-            actual = None
+        if outcomes is not None:
+            matched = [r for r in outcomes if r["unit_id"] == unit.unit_id]
+            actual = matched[0].get("unit_payload") if len(matched) == 1 else None
+            if unit.status == "failed":
+                status = "not_attempted"
+            elif (
+                len(matched) == 1
+                and matched[0].get("status") == unit.status
+                and actual == unit.model_dump(mode="json")
+            ):
+                status = "pass"
+            else:
+                status = "fail"
+            source = "ingestion_outcomes.unit_payload"
         else:
-            actual = payloads[0]
-            status = "pass" if all(p == unit.model_dump(mode="json") for p in payloads) else "fail"
+            # Older trials only saved offer rows; an absent no-offer outcome is unknown.
+            payloads = [r.get("unit_payload") for r in rows if r["unit_id"] == unit.unit_id]
+            actual = payloads[0] if payloads and all(p is not None for p in payloads) else None
+            if actual is None:
+                status = "not_attempted"
+            else:
+                status = (
+                    "pass" if all(p == unit.model_dump(mode="json") for p in payloads) else "fail"
+                )
+            source = "listing_sightings.unit_payload"
         checks.append(
             _check(
                 "complete unit dispositions and issues round trip",
                 unit.model_dump(mode="json"),
                 actual,
-                "listing_sightings.unit_payload",
+                source,
                 unit.unit_id,
                 status,
             )

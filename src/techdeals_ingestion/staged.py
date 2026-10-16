@@ -470,8 +470,9 @@ async def _discover(
     return views
 
 
-def _payload(views: list[View]) -> dict:
+def _payload(views: list[View], batch_id: str) -> dict:
     return {
+        "batch_id": batch_id,
         "units": [
             {
                 "unit_id": v.unit.unit_id,
@@ -480,7 +481,7 @@ def _payload(views: list[View]) -> dict:
                 "layout_coverage": v.coverage,
             }
             for v in views
-        ]
+        ],
     }
 
 
@@ -504,11 +505,11 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session) -> Pa
             view = _prepare(unit, index)
             prepared = (
                 await _discover(view, index, session, exposure)
-                if _size(_payload([view])) > max_bytes
+                if _size(_payload([view], package.package_id)) > max_bytes
                 else [view]
             )
             for selected in prepared:
-                if _size(_payload([selected])) > max_bytes:
+                if _size(_payload([selected], package.package_id)) > max_bytes:
                     failures[selected.unit.unit_id] = UnitResult(
                         unit_id=selected.unit.unit_id,
                         input_refs=selected.unit.input_refs,
@@ -529,7 +530,8 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session) -> Pa
     packs, pack = [], []
     for view in views:
         if pack and (
-            len(pack) >= settings.batch_size or _size(_payload(pack + [view])) > max_bytes
+            len(pack) >= settings.batch_size
+            or _size(_payload(pack + [view], package.package_id)) > max_bytes
         ):
             packs.append(pack)
             pack = []
@@ -539,7 +541,7 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session) -> Pa
     results = dict(failures)
     for pack in packs:
         expected = [v.unit for v in pack]
-        prompt = _dump({"batch_id": package.package_id, **_payload(pack)})
+        prompt = _dump(_payload(pack, package.package_id))
         try:
             exposure.reserve([record for view in pack for record in view.records])
             session.coverage = exposure.report()
