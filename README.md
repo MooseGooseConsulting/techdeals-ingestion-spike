@@ -91,7 +91,11 @@ these keys do not prove arbitrary source identity semantics.
 The first replacement-runtime `small-a` run (two complete native captures,
 11,584 bytes) timed out at the configured 90-second limit before the model
 returned extraction output. Neon retained both inputs and the failed attempt;
-zero entries were produced in that run. A one-record check is the next live step. Offline and explicit live SQL tests check
+zero entries were produced in that run. The subsequent single-record call
+(2,494 native bytes) also timed out at 90 seconds without output. An explicit
+parser-only trial of the free `poolside/laguna-xs-2.1:free` route returned HTTP
+429. That trial did not change the committed Lightning configuration. Useful
+live extraction is still unproven; storage tests do not substitute for it. Offline and explicit live SQL tests check
 application mechanics; they do not certify model extraction quality.
 
 All frozen captures currently have unknown trusted retrieval times. Do not
