@@ -126,13 +126,9 @@ def test_retention_survives_failure_and_a_b_a_history_is_cached(store):
     day2 = datetime(2026, 10, 11, tzinfo=UTC)
     day2_late = datetime(2026, 10, 11, 12, tzinfo=UTC)
     day3 = datetime(2026, 10, 12, tzinfo=UTC)
-    a1 = make_source(
-        token + "-a1", token + "-fetch-a1", b"A", retrieved_at=day1, namespace=token
-    )
+    a1 = make_source(token + "-a1", token + "-fetch-a1", b"A", retrieved_at=day1, namespace=token)
     b = make_source(token + "-b", token + "-fetch-b", b"B", retrieved_at=day2, namespace=token)
-    a2 = make_source(
-        token + "-a2", token + "-fetch-a2", b"A", retrieved_at=day3, namespace=token
-    )
+    a2 = make_source(token + "-a2", token + "-fetch-a2", b"A", retrieved_at=day3, namespace=token)
     b_late = make_source(
         token + "-b-late", token + "-fetch-b-late", b"B", retrieved_at=day2_late, namespace=token
     )
@@ -161,7 +157,7 @@ def test_retention_survives_failure_and_a_b_a_history_is_cached(store):
     current_prices = store.query("current_prices", native_id="server-42", namespace=token)
     assert len(current) == len(current_prices) == 1
     assert current[0]["observed_at"] == day3
-    assert current_prices[0]["amount"] == Decimal("10")
+    assert current_prices[0]["amount"] == Decimal(10)
 
 
 def test_equal_observation_conflicts_are_explicit_and_partial_result_does_not_refresh(store):
