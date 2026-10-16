@@ -11,7 +11,7 @@ From the repository root, with your existing Doppler credentials:
 
 ```bash
 PYDANTIC_AI_NO_BANNER=1 doppler run --project ai-automation --config dev -- \
-  uv run --with 'dspy==3.4.1' python scripts/review_rlm.py run \
+  uv run --with 'dspy[deno]==3.4.1' python scripts/review_rlm.py run \
   --package dev-a --ids spd --out .runs/rlm-spd-001
 ```
 
@@ -19,7 +19,7 @@ To exercise linked eBay captures **with their manifest grouping retained**:
 
 ```bash
 PYDANTIC_AI_NO_BANNER=1 doppler run --project ai-automation --config dev -- \
-  uv run --with 'dspy==3.4.1' python scripts/review_rlm.py run \
+  uv run --with 'dspy[deno]==3.4.1' python scripts/review_rlm.py run \
   --package dev-a --ids archive-1 archive-8 archive-10 archive-16 \
   --out .runs/rlm-ebay-001
 ```
@@ -32,9 +32,8 @@ bound the number of root iterations and submodel calls respectively; the default
 is 8 and 12. The total model requests can exceed either limit individually.
 
 The laptop runs only the Python/Deno sandbox: all model inference is remote.
-DSPy's sandbox runtime may require an available Deno executable, depending on
-how your installation provisions it. DSPy is an optional `uv --with` dependency;
-the default project runtime is unchanged.
+The optional `dspy[deno]` extra provides a managed Deno executable for its
+sandbox. The default project runtime is unchanged.
 
 ## Review an experiment
 
