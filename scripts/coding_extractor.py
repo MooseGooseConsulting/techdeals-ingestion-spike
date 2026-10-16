@@ -116,7 +116,7 @@ def prepare(root: Path, case: str, dest: Path) -> dict:
 
     _save(dest / "contract.schema.json", Extraction.model_json_schema())
     (dest / "TASK.md").write_text(TASK)
-    _save(dest / "harness.json", {"case": case, "repo": str(root), "schema": "Extraction"})
+    _save(dest / "harness.json", {"case": case, "schema": "Extraction"})
     return {"workspace": str(dest), "case": case, "captures": ids}
 
 
@@ -284,12 +284,57 @@ def _mutation(workspace: Path, case: str, directory: Path) -> tuple[Path, dict] 
     return new_manifest, expected
 
 
-def evaluate(workspace: Path, *, timeout: int = 90, mutation: bool = True) -> dict:
-    """Independently run agent-written code; oracle is never in its workspace."""
+def _fixture_integrity(workspace: Path, root: Path, case: str) -> list[str]:
+    """Verify against original native bytes, never agent-editable manifest hashes."""
+    source_manifest = json.loads((root / "corpus/manifest.json").read_text())
+    originals = {r["id"]: r for r in source_manifest["captures"]}
+    work_manifest = json.loads((workspace / "captures.json").read_text())
+    selected = work_manifest["captures"]
+    expected_ids = CASES[case][1]
+    if [r["input_id"] for r in selected] != expected_ids:
+        return ["Agent changed the capture manifest identity or order"]
+    issues = []
+    for record in selected:
+        capture_id = record["input_id"]
+        original = originals[capture_id]
+        raw = (root / original["path"]).read_bytes()
+        copied = (workspace / record["path"]).resolve()
+        if not copied.is_relative_to((workspace / "inputs").resolve()):
+            issues.append(f"{capture_id}: capture path escaped inputs directory")
+            continue
+        expected_hash = hashlib.sha256(raw).hexdigest()
+        if not copied.is_file() or hashlib.sha256(copied.read_bytes()).hexdigest() != expected_hash:
+            issues.append(f"{capture_id}: source bytes changed from frozen corpus")
+        if record.get("sha256") != expected_hash:
+            issues.append(f"{capture_id}: capture metadata hash changed")
+        for key, source_key in [
+            ("namespace", "source_namespace"),
+            ("linked_group", "linked_group"),
+            ("media_type", "media_type"),
+            ("acquisition_key", "acquisition_key"),
+        ]:
+            if record.get(key) != original.get(source_key):
+                issues.append(f"{capture_id}: acquisition field {key} changed")
+    return issues
+
+
+def evaluate(
+    workspace: Path,
+    *,
+    repo_root: Path | None = None,
+    timeout: int = 90,
+    mutation: bool = True,
+) -> dict:
+    """Run agent-written code against a withheld oracle; never inject it to the agent."""
     workspace = workspace.resolve()
     config = json.loads((workspace / "harness.json").read_text())
-    root = Path(config["repo"])
+    root = (repo_root or Path(__file__).resolve().parents[1]).resolve()
     case = config["case"]
+    if case not in CASES:
+        return {"case": case, "passed": False, "errors": ["Unknown evaluation case"]}
+    integrity = _fixture_integrity(workspace, root, case)
+    if integrity:
+        return {"case": case, "passed": False, "errors": integrity}
     oracle = json.loads((root / "corpus/oracle/expected.json").read_text())["cases"][CASES[case][2]]
     extracted = workspace / "extraction.json"
     extracted.unlink(missing_ok=True)
@@ -392,6 +437,13 @@ def _agent_turn(
         {
             "model": model,
             "small_model": model,
+            "share": "disabled",
+            "agent": {
+                "build": {"model": model},
+                "general": {"model": model},
+                "explore": {"model": model},
+                "scout": {"model": model},
+            },
             "permission": {
                 "edit": "allow",
                 "bash": "allow",
@@ -428,6 +480,7 @@ def run(
     model: str,
     executable: str,
     *,
+    repo_root: Path | None = None,
     rounds: int = 3,
     timeout: int = 900,
     extractor_timeout: int = 90,
@@ -463,7 +516,7 @@ def run(
             executable,
             timeout,
         )
-        report = evaluate(workspace, timeout=extractor_timeout)
+        report = evaluate(workspace, repo_root=repo_root, timeout=extractor_timeout)
         _save(workspace / f"evaluation-{round_no:02d}.json", report)
         summary["rounds"].append(
             {
@@ -528,13 +581,20 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(prepare(args.repo_root, args.case, args.workspace), indent=2))
         return 0
     if args.command == "evaluate":
-        report = evaluate(args.workspace, mutation=not args.no_mutation)
+        report = evaluate(
+            args.workspace, repo_root=args.repo_root, mutation=not args.no_mutation
+        )
         print(json.dumps(report, indent=2))
         return 0 if report["passed"] else 1
     if args.rounds < 1 or args.timeout < 1:
         parser.error("rounds and timeout must be positive")
     summary = run(
-        args.workspace, args.model, args.opencode, rounds=args.rounds, timeout=args.timeout
+        args.workspace,
+        args.model,
+        args.opencode,
+        repo_root=args.repo_root,
+        rounds=args.rounds,
+        timeout=args.timeout,
     )
     print(json.dumps(summary, indent=2))
     return 0 if summary["status"] == "passed" else 1
