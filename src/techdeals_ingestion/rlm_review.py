@@ -10,9 +10,10 @@ import html
 import io
 import json
 import traceback
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 
 SENSITIVE_KEYS = frozenset({"api_key", "authorization", "proxy_authorization", "x-api-key"})
@@ -169,7 +170,7 @@ def record_rlm_run(
         if validate is not None:
             validate(output)
         summary["status"] = "partial" if fallback else "completed"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - capture failure artifacts without masking the run
         summary["status"] = "failed"
         summary["error_type"] = type(exc).__name__
         summary["error"] = str(exc)
