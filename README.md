@@ -1,8 +1,8 @@
 # TechDeals ingestion spike
 
 Turn heterogeneous hardware listings into a database that other agents can
-query, relate, and tally for their analysis. Preserve the source, what a purchase
-includes, what its price covers, and what changes over time.
+query and tally for their analysis. Preserve the source, scraped item
+and price facts, source-stated associations, and changes over time.
 
 Inputs come from multiple scrapers, APIs, feeds, browser collectors, and exports.
 Bright Data is one collection option among them.

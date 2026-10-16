@@ -175,7 +175,7 @@ definitions and example records come from inspection of the initial captures.
 | Input references | Which supplied captures and entries support the result; native source IDs and URLs when present |
 | Items or variants | An array of extracted entries, with title/description, their source grouping, and any explicit variant distinctions |
 | Common item fields | Seller, location, condition, and availability, preserving original values and explicit unknowns |
-| Prices | An array of amounts with currency, original text, stated kind such as ask or bid, which entry/configuration each amount describes, and supporting source references |
+| Prices | An array of amounts with currency, original text, stated kind such as ask or bid, any source-stated item or listing context, and supporting source references |
 | Attributes | Additional specifications and source fields with their original names/values, normalized values and units where justified, and supporting references; different hardware types can have different attributes |
 | Source dates | Dates stated in the supplied content, with their meaning, original text, and source references; unresolved meanings remain explicit |
 | Unresolved information | Ambiguous fields or associations, conflicts, and entries that could not be interpreted, retaining the relevant evidence |
@@ -186,6 +186,14 @@ it must not silently count as a successful ingestion. A component mentioned
 inside a system must not become a separately priced offer unless the source
 supports that interpretation. Prices can remain associated with a source group
 when their scope cannot be narrowed reliably.
+
+This provisional output target does not prescribe a general purchase-content
+relationship model. Preserve source-stated quantities and associations in the
+native evidence and extracted result when the inspected inputs support them;
+do not infer whether a component is installed, included, or separately
+purchasable. Decide whether common relationship fields are useful after the
+initial captures and downstream needs have been reviewed. Cost apportionment is
+outside the ingestion requirement.
 
 Collection identity and known retrieval times enter with the input metadata.
 Import/parse times and parser version are recorded by the program. Carry these
