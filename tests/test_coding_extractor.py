@@ -62,7 +62,7 @@ def _fixture_repo(tmp_path, monkeypatch):
 
 
 def _program(workspace):
-    (workspace / "extractor.py").write_text('''import argparse, json
+    (workspace / "extractor.py").write_text("""import argparse, json
 from pathlib import Path
 p = argparse.ArgumentParser()
 p.add_argument("--manifest")
@@ -81,7 +81,7 @@ for source in manifest["captures"]:
                             "prices": [{"kind": "ask", "original": str(variant["price"]),
                                         "amount": str(variant["price"]), "currency": None}]})
 Path(a.output).write_text(json.dumps({"entries": entries, "issues": []}))
-''')
+""")
 
 
 def test_prepare_preserves_bytes_and_hides_oracle(tmp_path, monkeypatch):
@@ -90,7 +90,10 @@ def test_prepare_preserves_bytes_and_hides_oracle(tmp_path, monkeypatch):
     info = harness.prepare(root, "spd", workspace)
     assert info["captures"] == ["spd"]
     metadata = json.loads((workspace / "captures.json").read_text())["captures"][0]
-    assert metadata["sha256"] == hashlib.sha256((workspace / metadata["path"]).read_bytes()).hexdigest()
+    assert (
+        metadata["sha256"]
+        == hashlib.sha256((workspace / metadata["path"]).read_bytes()).hexdigest()
+    )
     assert not (workspace / "corpus").exists()
     assert not (workspace / "oracle").exists()
     assert (workspace / "contract.schema.json").exists()
@@ -116,10 +119,20 @@ Path(a.output).write_text(json.dumps({"entries":[{"native_id":"101","variant_id"
 
 
 def test_offer_comparison_is_multiset_and_does_not_infer_currency():
-    extraction = {"entries": [
-        {"native_id": "t3_post", "variant_id": None, "prices": [{"amount": "20.00", "kind": "ask"}]},
-        {"native_id": "t3_post", "variant_id": None, "prices": [{"amount": "20", "kind": "ask"}]},
-    ]}
+    extraction = {
+        "entries": [
+            {
+                "native_id": "t3_post",
+                "variant_id": None,
+                "prices": [{"amount": "20.00", "kind": "ask"}],
+            },
+            {
+                "native_id": "t3_post",
+                "variant_id": None,
+                "prices": [{"amount": "20", "kind": "ask"}],
+            },
+        ]
+    }
     oracle = {"offers": [{"native_id": "t3_post", "amount": "20"}]}
     r = harness.compare(extraction, oracle, "hls")
     assert not r["passed"] and r["actual_priced_offers"] == 2
