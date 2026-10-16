@@ -41,10 +41,23 @@ HTML/browser collectors, and exports. Bright Data is one possible collection
 method. Intake must preserve and organize information across these routes
 without assuming a single provider's fields or response format.
 
+The number and arrangement of records vary independently of the collection
+method. One payload may contain hundreds of products and variants; one post may
+contain several separately priced items; one auction may have its description
+and bid information in separate responses. Supporting several sites with the
+same response shape does not establish that these differences are handled.
+
 **Required result:** other agents can retrieve, sort, query, and tally useful
 information from these different structures together while retaining the context
 that determines what each item and purchase means. This must work across varied
-real source and hardware shapes; one server family cannot establish that.
+real source and hardware shapes from the first working delivery. Establish the
+initial representation against several different shapes together, including
+one input producing many records and several inputs describing the same listing.
+One server family or one collector's layout cannot establish that result.
+The proposed solution is a shared LLM-backed parser, supported by general format
+readers and reliable storage behavior. It must be tried against unfamiliar
+sources. Requiring a handwritten parser or field mapping for every new source
+would leave the central problem unsolved.
 
 ## P2. Contents, quantities, and purchase structure
 

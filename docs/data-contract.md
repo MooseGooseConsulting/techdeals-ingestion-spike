@@ -20,11 +20,18 @@ eBay listing remains the same source listing whether collected by a local
 scraper, a prebuilt service, or a custom collector. Keep the collector and its
 run metadata as provenance without making that route the listing's identity.
 
-Each implemented input mapping must establish the source's item/variant keys,
-field meanings, actual collection method, date semantics, and failure behavior.
-Preserve the native payload. Map it to the shared database behavior described
-here without requiring every scraper to emit identical native fields. A JSON
-file alone does not establish how its contents were acquired.
+The design target is one shared LLM-backed parser that can interpret unfamiliar
+source content without requiring us to write a parser or field mapping for
+every source. Preserve native payloads and their collection context. General
+format readers and existing collector metadata prepare the input; the shared
+parser produces usable records with source references. A JSON file alone does
+not establish how its contents were acquired.
+
+Source identifiers and timestamp meanings still need evidence. Use documented
+collector metadata where available and preserve uncertain native fields when
+their meaning is unresolved. The LLM must not turn an assumption about a field
+into an established identity or observation date. Source-specific rules are
+targeted remedies for demonstrated limitations, not prerequisites for intake.
 
 ## What comes in
 
@@ -36,6 +43,87 @@ component interpretation is not required before this information can be stored.
 Different sources may return one listing, a catalog with many products, several
 variants, or a post containing multiple items. Preserve the original source
 record while exposing the useful individual entries and their associations.
+
+## Different input shapes through the same path
+
+Design the first path against the following shapes together. Collection method,
+file format, and information structure are separate dimensions: JSON can hold a
+single listing, a whole catalog, or only one fragment of an auction. A CSV row
+can still contain ambiguous free text. Different source names alone do not
+establish structural variety.
+
+| Shape to include initially | What ingestion must preserve and expose |
+|---|---|
+| One structured listing | Directly map explicit item, price, currency, location, seller, condition, and date fields; retain unmapped source fields |
+| A collection of products with nested variants | Unpack all products and their separately priced variants, retaining shared product context and variant identity; do not treat the response or first product as the only item |
+| HTML containing repeated rows or cards | Retain the page and each entry's location within it; distinguish row prices from page-wide text, shipping, and other amounts |
+| Feed entries or posts with multiple items in text | Retain entry identity and source dates, separate actual offers from other post types, and associate each item with its stated price or explicit ambiguity |
+| Delimited rows or historical exports | Preserve row identity, original columns, date meanings, and price kinds; do not assume an old exported value is a new observation or that derived columns are seller statements |
+| Several responses describing one listing | Join description, bid/price, or manifest information only through established source keys and compatible observation context; retain every contributing payload and its own dates |
+
+These are the initial design cases, not an exhaustive list of supported sources.
+The first working delivery must exercise them through the same storage and
+agent query path. It does not require every combination of collector, format,
+hardware type, and price kind. Select source examples that expose several of
+those differences at once, and record the remaining coverage explicitly.
+
+The path has three responsibilities:
+
+1. **Preserve and prepare the input.** Keep its native content and collection
+   context. General readers handle JSON, HTML, feeds, and delimited files; they
+   do not need hardware interpretation rules for each site. Prepare manageable
+   batches while retaining entry references, enclosing context, and supplied
+   collection metadata. Large inputs must not silently lose entries or context
+   through truncation. Related responses can be supplied together when their
+   source keys and observation context establish the connection.
+2. **Interpret through the shared parser.** Use batched free-model parsing to
+   identify items, variants, attributes, and which prices belong to them across
+   the different layouts. Copy established structured facts directly when
+   available; their presence does not require a new source-specific parser.
+   Keep multiple prices with their kinds and scopes instead of selecting one
+   arbitrary number. Return source references for the extracted information.
+   Preserve partial results and unknowns when an association cannot be
+   established. One input may produce many records, and a record may refer to
+   several contributing inputs.
+3. **Apply shared storage and read behavior.** Listing identity, dates,
+   deduplication, history, and source traceability have consistent meanings
+   across the inputs. Common facts such as item, prices, location, seller,
+   condition, and dates are queryable across inputs. Source-specific attributes
+   remain structured and accessible alongside the original payload, with their
+   meanings documented as they are mapped.
+
+The shared representation must accommodate repeated prices, variants, and
+additional attributes without requiring every hardware type to have the same
+columns. Retaining native data also keeps fields available before they have a
+shared mapping; that retention alone does not mean those fields are normalized
+or usable in cross-source queries.
+
+For a new or changed input shape, retain the capture and explicitly identify
+unmapped entries, uncertain associations, and failed interpretations. Do not
+silently drop entries or publish guessed fields as established facts. A failure
+in one entry must leave independently usable entries retrievable. First try a
+new source through the shared parser. Add source-specific code only for a
+demonstrated gap that general preparation or parsing cannot handle. Change
+shared semantics when inspected information shows a real new requirement.
+
+### Existing material to inspect for these shapes
+
+The eBay capture below is one starting point. Other available material includes
+[catalog JSON](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/scripts/ingest/serverpartdeals/fixtures/collections_all_p1.json),
+[retailer HTML](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/scripts/ingest/disctech/fixtures/ssd_listing_p1.html),
+[an Atom fixture](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/scripts/ingest/reddit_homelabsales/fixtures/sample_atom.xml),
+[a CSV export](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/research/ssd-pricing-brightdata/ssd_prices_export_v2.csv),
+and separate [auction asset](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/scripts/ingest/govdeals/fixtures/asset_30467_94.json)
+and [bid](https://github.com/MooseGooseConsulting/TechdealsHandoff/blob/1ac8f887db62420a2c2dc2de2ed41597ee7802c6/scripts/ingest/govdeals/fixtures/bidbox_30467_94.json) fixtures.
+
+These locate structural examples, not a verified acceptance corpus. The Atom
+fixture is authored; the CSV is a derived export; the auction fixtures contain
+enriched or authored fields. The inspected catalog has six products but only
+one variant per product, so it does not establish support for multiple variants.
+Verify acquisition provenance and find missing real examples before claiming
+source coverage. Use explicitly labelled constructed cases to check edge
+behavior, without presenting them as real captures or treating old normalized
+values as expected truth. Existing parsing code is not the starting design.
 
 ## From a source record to stored information
 
@@ -76,9 +164,24 @@ Ingestion should:
 
 ## Where LLM parsing fits
 
-Use batched free-model interpretation for entries or fields whose meaning needs
-context. Structured source information can be mapped directly. Keep the original
-record available even when interpretation is partial or fails.
+The shared LLM-backed parser is the main proposed solution to varied source
+layouts and contextual interpretation. It receives captured content with source
+and collection context and returns records in a common, extensible structure.
+It must handle unfamiliar sources without depending on a handwritten parser
+for each one. Structured source information can be copied directly. Keep the
+original record available even when interpretation is partial or fails.
+
+Establish whether this approach works with varied real captures, including
+sources held back while prompts and preparation are developed. Requiring new
+source-specific code to pass every new example would fail the intended design.
+Check returned records against the evidence, including missing items, omitted
+prices, incorrect associations, invented values, and lost dates. A valid output
+structure alone does not establish a correct parse.
+
+Ordinary code validates structure, input references, and known values; performs
+deterministic conversions and arithmetic; and applies database identity,
+deduplication, and history rules. The model interprets the supplied evidence;
+it cannot recover facts that were never captured or establish a missing date.
 
 Batching means multiple entries in each model request. Retry and recovery paths
 must preserve that requirement instead of falling back to one request per entry.
@@ -100,9 +203,12 @@ missing model output.
 
 Importing or parsing an old record today does not make its prices current.
 Preserve source timezone and precision when supplied, normalize known instants
-consistently, and leave unknown dates unknown. Each collector needs a documented
-mapping for its actual timestamp fields. An explicitly dated historical quote
-also keeps its quote date separately from the date we retrieved the page.
+consistently, and leave unknown dates unknown. Use established collector
+metadata where available. Unfamiliar timestamp fields can be retained with
+unresolved meaning; intake does not wait for a custom mapping. Confirm their
+meaning before publishing them as observation dates. An explicitly dated
+historical quote also keeps its quote date separately from the date we
+retrieved the page.
 
 ## Listing identity and repeated scrapes
 
@@ -112,9 +218,12 @@ distinctions below describe required behavior, not a prescribed table count.
 - **Listing identity:** use a stable source/native listing identifier, with
   variant or other source context where it distinguishes separately priced
   entries. Price and scrape time do not define the listing's identity. A URL
-  fallback needs explicit source-specific rules that preserve meaningful
-  variant parameters. Matching the same hardware model across sellers is a
-  separate task and must not collapse their listings.
+  fallback must preserve meaningful variant parameters. Use established source
+  keys or URL rules where available. If reliable identity is unresolved, retain
+  the input and parsed information with that status; do not guess a listing
+  merge. Targeted source-specific confirmation may be needed before claiming
+  reliable listing deduplication. Matching the same hardware model across
+  sellers is a separate task and must not collapse their listings.
 - **Scrape identity:** identify the collection and its record independently of
   the listing. Reimporting or retrying the same captured result is idempotent.
 - **Stored content:** reuse unchanged listing information and retain when it
@@ -153,7 +262,7 @@ missing field does not by itself establish a real deletion or stock change.
 
 ## Scraper output is part of the design
 
-Inspect what each existing collector supplies and define its input mapping.
+Inspect what existing collectors supply to the shared parser.
 Where necessary fields or time/identity semantics are missing, consider a
 targeted collector change. A custom Bright Data scraper is an available option
 for suitable sources; other sources can keep their own acquisition methods.
@@ -172,7 +281,7 @@ or production schedule has been created or changed for this spike.
 
 ## Choices still to resolve
 
-- Per-source listing and variant keys, including fallbacks where native IDs are missing.
+- Which initial examples have established listing/variant keys and dates, and which remain explicitly unresolved; targeted fallbacks where required for reliable history or deduplication.
 - The meaning and precision of existing provider timestamps.
 - Which source fields participate in content comparison, and how normalization affects it.
 - Whether compact sightings or first/last-seen intervals preserve the history we need.
