@@ -1,7 +1,9 @@
 import json
-from types import SimpleNamespace
 
 import pytest
+from pydantic_ai import Agent, ToolOutput
+from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.models.function import FunctionModel
 
 from techdeals_ingestion.contracts import (
     CaptureInput,
@@ -51,23 +53,37 @@ class Session:
 
     def build_agent(self, **kwargs):
         assert len(kwargs["tools"]) == 4
-        return kwargs
+
+        def respond(messages, info):
+            prompt = next(
+                p.content for m in messages for p in m.parts if p.part_kind == "user-prompt"
+            )
+            value = self.output(prompt, self.deps)
+            return ModelResponse(
+                parts=[ToolCallPart(info.output_tools[0].name, value.model_dump(mode="json"))]
+            )
+
+        return Agent(
+            FunctionModel(respond), output_type=ToolOutput(kwargs["output_type"]), retries=1
+        )
 
     async def run(self, agent, prompt, deps):
+        self.deps = deps
+        return await agent.run(prompt)
+
+    def output(self, prompt, deps):
         if self.fail:
             raise RuntimeError("provider failed")
         if self.read:
             for cid in deps.allowed:
                 deps.read(EvidenceRef(capture_id=cid, locator="$"), 0, 100)
         data = json.loads(prompt)
-        return SimpleNamespace(
-            output=ParseBatchResult(
-                batch_id=data["package_id"],
-                units=[
-                    UnitResult(unit_id=u["unit_id"], input_refs=u["input_refs"], status="no_offer")
-                    for u in data["units"]
-                ],
-            )
+        return ParseBatchResult(
+            batch_id=data["package_id"],
+            units=[
+                UnitResult(unit_id=u["unit_id"], input_refs=u["input_refs"], status="no_offer")
+                for u in data["units"]
+            ],
         )
 
 
@@ -95,23 +111,21 @@ async def test_child_reads_allow_complete_and_metadata_survives_repair(tmp_path)
     class RepairSession(Session):
         calls = 0
 
-        async def run(self, agent, prompt, deps):
+        def output(self, prompt, deps):
             assert "trusted collection" in prompt
             assert str(tmp_path) not in prompt
             self.calls += 1
             cid = "a" if self.calls == 1 else "b"
             deps.read(EvidenceRef(capture_id=cid, locator="json:/title"), 0, 100)
-            return SimpleNamespace(
-                output=ParseBatchResult(
-                    batch_id="batch",
-                    units=[
-                        UnitResult(
-                            unit_id=cid,
-                            input_refs=[EvidenceRef(capture_id=cid, locator="$")],
-                            status="complete",
-                        )
-                    ],
-                )
+            return ParseBatchResult(
+                batch_id="batch",
+                units=[
+                    UnitResult(
+                        unit_id=cid,
+                        input_refs=[EvidenceRef(capture_id=cid, locator="$")],
+                        status="complete",
+                    )
+                ],
             )
 
     session = RepairSession()
@@ -314,3 +328,34 @@ async def test_sdk_batch_reads_and_reserves_final_request(monkeypatch, tmp_path)
     assert capture_summary["native_index"]["index_only_not_read"]
     assert "json:/title" in json.dumps(capture_summary["native_index"])
     assert "native evidence" not in json.dumps(capture_summary["native_index"])
+
+
+def test_exposure_budget_is_atomic_and_repeated_reads_are_accounted(tmp_path):
+    _, index = setup(tmp_path, "α" * 10)
+    reader = Reader(index, frozenset(["a", "b"]), max_exposure_bytes=12)
+    ref = EvidenceRef(capture_id="a", locator="$")
+    assert reader.read(ref, 0, 8)["next_offset"] == 8
+    reader.read(ref, 4, 8)
+    assert reader.exposure_bytes == 12
+    assert reader.total_view_bytes == 16
+    with pytest.raises(ValueError, match="exposure limit"):
+        reader.read_many(["a", "b"], ["$", "$"], [0, 0], 4)
+    assert reader.exposure_bytes == 12
+    assert reader.total_view_bytes == 16
+    assert ("b", "$") not in reader.exposed
+    # Exhausting fresh-byte allowance does not prevent rereading allowed bytes.
+    assert reader.read(ref, 0, 4)["text"] == "αα"
+    assert reader.total_view_bytes - reader.exposure_bytes == 8
+
+
+@pytest.mark.asyncio
+async def test_native_package_allowance_is_separate_from_view_exposure(tmp_path):
+    from techdeals_ingestion.settings import ParserSettings
+
+    package, index = setup(tmp_path, "x" * 310_000)
+    session = Session()
+    session.settings = ParserSettings.load()
+    result = await parse_batch(package, index, session)
+    assert all(u.status == "no_offer" for u in result.units)
+    assert session.coverage["native_package_bytes"] == 620_000
+    assert session.coverage["unique_view_bytes_read"] == 200

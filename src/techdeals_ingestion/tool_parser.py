@@ -11,8 +11,8 @@ from pydantic_ai import RunContext, Tool
 
 from .contracts import EvidenceRef, ParseBatchResult, UnitResult, WorkPackage, prepare_units
 from .evidence import EvidenceIndex
+from .extraction import run_validated
 from .instructions import SEMANTIC_INSTRUCTIONS
-from .validation import validate_result
 
 RESPONSE_BYTES = 16_384
 EXPOSURE_BYTES = 512 * 1024
@@ -36,6 +36,8 @@ class Reader:
     page_bytes: int = RESPONSE_BYTES
     exposed: dict[tuple[str, str], set[int]] = field(default_factory=dict)
     exposure_bytes: int = 0
+    total_view_bytes: int = 0
+    max_exposure_bytes: int = EXPOSURE_BYTES
     session: Any = None
     max_requests: int = 12
 
@@ -63,14 +65,24 @@ class Reader:
             raise ValueError("serialized tool response exceeds 16 KiB; request a smaller page")
         return result
 
-    def record(self, page: dict) -> None:
-        offset = page["offset"]
-        end = offset + len(page["text"].encode())
-        key = (page["ref"]["capture_id"], page["ref"]["locator"])
-        prior = self.exposed.get(key, set())
-        fresh = set(range(offset, end)) - prior
-        self.exposed.setdefault(key, set()).update(fresh)
-        self.exposure_bytes += len(fresh)
+    def record(self, pages: list[dict]) -> None:
+        # View offsets are UTF-8 bytes within each locator, not original-source
+        # offsets. Root/child overlap is conservatively charged as distinct views.
+        pending = {key: set(value) for key, value in self.exposed.items()}
+        total = 0
+        for page in pages:
+            offset = page["offset"]
+            length = len(page["text"].encode())
+            key = (page["ref"]["capture_id"], page["ref"]["locator"])
+            pending.setdefault(key, set()).update(range(offset, offset + length))
+            total += length
+        unique = sum(map(len, pending.values()))
+        if unique > self.max_exposure_bytes:
+            raise ValueError("package unique view exposure limit exhausted; request a smaller page")
+        # Commit all pages together, so a rejected batch exposes/counts nothing.
+        self.exposed = pending
+        self.exposure_bytes = unique
+        self.total_view_bytes += total
 
     def read(self, ref: EvidenceRef, offset: int, limit: int) -> dict:
         result = self.read_many([ref.capture_id], [ref.locator], [offset], limit)
@@ -104,8 +116,7 @@ class Reader:
                 raise ValueError("reference metadata exceeds response limit; request fewer regions")
             limit = max(4, limit // 2)
         result = self.finish(result)
-        for page in pages:
-            self.record(page)
+        self.record(pages)
         return result
 
     def overview(self, capture_id: str) -> dict:
@@ -265,11 +276,12 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session: Any) 
         frozenset(c.capture_id for c in package.captures),
         max_attempts=getattr(settings, "max_tool_calls", TOOL_ATTEMPTS),
         page_bytes=min(getattr(settings, "tool_page_bytes", RESPONSE_BYTES), RESPONSE_BYTES),
+        max_exposure_bytes=getattr(settings, "max_exposure_bytes", EXPOSURE_BYTES),
         session=session,
         max_requests=getattr(settings, "max_requests", 12),
     )
     native_bytes = sum(len(index.originals[c.capture_id]) for c in package.captures)
-    native_limit = getattr(settings, "max_package_bytes", EXPOSURE_BYTES)
+    native_limit = getattr(settings, "max_package_bytes", 1024 * 1024)
     if native_bytes > native_limit:
         return ParseBatchResult(
             batch_id=package.package_id,
@@ -307,61 +319,13 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session: Any) 
         tools=reader_tools(),
         deps_type=Reader,
     )
-    accepted = {}
-    errors = []
-    for attempt in range(2):
-        if attempt:
-            runs = getattr(session, "runs", [])
-            if runs and runs[-1].get("model_retry_prompts", 0):
-                break
-            agent = session.build_agent(
-                output_type=ParseBatchResult,
-                instructions=INSTRUCTIONS,
-                tools=reader_tools(),
-                deps_type=Reader,
-                retry_budget=0,
-            )
-        try:
-            response = await session.run(agent, prompt, deps=reader)
-            result = response.output
-            errors = validate_result(result, units, index)
-            if result.batch_id != package.package_id:
-                errors.append("batch_id must match package_id")
-            for expected in units:
-                candidates = [u for u in result.units if u.unit_id == expected.unit_id]
-                if expected.unit_id in accepted or len(candidates) != 1:
-                    continue
-                unit = candidates[0]
-                local_errors = validate_result(
-                    ParseBatchResult(batch_id=package.package_id, units=[unit]), [expected], index
-                )
-                if not local_errors:
-                    accepted[unit.unit_id] = unit
-            if len(accepted) == len(units):
-                break
-            prompt = (
-                context
-                + "\nCorrect only missing or invalid units once. Already accepted: "
-                + str(list(accepted))
-                + "\nValidation errors: "
-                + str(errors)
-                + "\nPrior result: "
-                + result.model_dump_json()
-            )
-        except Exception as exc:  # noqa: BLE001 - provider failures become explicit unit failures
-            errors = [f"{type(exc).__name__}: {exc}"]
-            break
+    result = await run_validated(
+        session, agent, prompt, units, index, package.package_id, deps=reader
+    )
     final = []
     for expected in units:
-        unit = accepted.get(expected.unit_id)
-        if unit is None:
-            unit = UnitResult(
-                unit_id=expected.unit_id,
-                input_refs=expected.input_refs,
-                status="failed",
-                issues=["Invalid or missing model unit", *map(str, errors)],
-            )
-        elif unit.status in ("complete", "no_offer") and not all(
+        unit = next(u for u in result.units if u.unit_id == expected.unit_id)
+        if unit.status in ("complete", "no_offer") and not all(
             _read_any(reader, r.capture_id) for r in expected.input_refs
         ):
             unit = unit.model_copy(
@@ -377,6 +341,10 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session: Any) 
     session.coverage = {
         "native_package_bytes": native_bytes,
         "unique_view_bytes_read": reader.exposure_bytes,
+        "total_view_bytes_read": reader.total_view_bytes,
+        "repeated_view_bytes_read": reader.total_view_bytes - reader.exposure_bytes,
+        "view_exposure_limit": reader.max_exposure_bytes,
+        "exposure_meaning": "Unique UTF-8 offsets per capture and locator; overlapping locators may overcount original source. Counts tool bodies, not SDK history retransmission.",
         "tool_body_attempts": reader.attempts,
         "captures": [
             {

@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from bs4 import BeautifulSoup, Tag
 from pydantic import Field
@@ -24,7 +24,7 @@ from .contracts import (
     prepare_units,
 )
 from .evidence import EvidenceIndex
-from .validation import validate_result
+from .extraction import run_validated
 
 CHUNK_BYTES = 64 * 1024
 
@@ -51,6 +51,39 @@ class View:
     issues: list[str]
     parent_id: str | None = None
     coverage: dict | None = None
+
+
+@dataclass
+class ExposureBudget:
+    """Conservative serialized prepared views, including discovery previews.
+
+    Exact repeated records/pages count once toward the cap. Different views of
+    overlapping source count separately; these are not unique native bytes.
+    """
+
+    limit: int
+    seen: set[bytes] = field(default_factory=set)
+    unique_bytes: int = 0
+    total_bytes: int = 0
+
+    def reserve(self, values) -> None:
+        bodies = [_dump(value).encode() for value in values]
+        fresh = set(bodies) - self.seen
+        size = sum(map(len, fresh))
+        if self.unique_bytes + size > self.limit:
+            raise ValueError("package prepared view exposure limit exhausted")
+        self.seen.update(fresh)
+        self.unique_bytes += size
+        self.total_bytes += sum(map(len, bodies))
+
+    def report(self) -> dict:
+        return {
+            "unique_prepared_view_bytes": self.unique_bytes,
+            "total_prepared_view_bytes": self.total_bytes,
+            "repeated_prepared_view_bytes": self.total_bytes - self.unique_bytes,
+            "view_exposure_limit": self.limit,
+            "exposure_meaning": "Serialized records and discovery previews; overlapping views conservatively count separately. Counts submitted views, not SDK history retransmission.",
+        }
 
 
 def _dump(value) -> str:
@@ -172,9 +205,8 @@ def _chunks(records: list[dict], budget: int = CHUNK_BYTES) -> list[list[dict]]:
     return result
 
 
-async def _run(session, output_type, instructions, prompt, *, correction=False):
-    kwargs = {"retry_budget": 0} if correction else {}
-    agent = session.build_agent(output_type=output_type, instructions=instructions, **kwargs)
+async def _run(session, output_type, instructions, prompt):
+    agent = session.build_agent(output_type=output_type, instructions=instructions)
     result = await session.run(agent, prompt)
     return result.output
 
@@ -347,7 +379,9 @@ def _overview_pages(overview, budget):
     return pages
 
 
-async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
+async def _discover(
+    view: View, index: EvidenceIndex, session, exposure: ExposureBudget
+) -> list[View]:
     groups = []
     context = []
     budget = (
@@ -366,6 +400,8 @@ async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
             }
         )
         try:
+            exposure.reserve([page])
+            session.coverage = exposure.report()
             result = await _run(
                 session,
                 Discovery,
@@ -389,9 +425,12 @@ async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
             context.extend(result.context_refs)
             view.issues.extend(result.issues)
         except Exception as exc:  # noqa: BLE001 - isolate provider/schema failures per unit
-            view.issues.append(
-                f"layout overview {number + 1}/{len(pages)} failed: {type(exc).__name__}"
+            reason = (
+                "package prepared view exposure limit exhausted"
+                if isinstance(exc, ValueError) and "exposure limit" in str(exc)
+                else type(exc).__name__
             )
+            view.issues.append(f"layout overview {number + 1}/{len(pages)} failed: {reason}")
     # Merge groups sharing an exact indexed reference: source identity, not title guessing.
     merged = []
     for group in groups:
@@ -451,29 +490,21 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session) -> Pa
     settings = getattr(session, "settings", None) or ParserSettings.load()
     max_bytes = settings.max_prepared_bytes
     units = prepare_units(package)
+    exposure = ExposureBudget(settings.max_exposure_bytes)
+    session.coverage = exposure.report()
     if (
         sum(len(index.originals[c.capture_id]) for c in package.captures)
         > settings.max_package_bytes
     ):
-        raise ValueError("package exceeds 512 KiB allowed source limit")
+        raise ValueError("package exceeds configured native package limit")
     views = []
     failures = {}
     for unit in units:
         try:
             view = _prepare(unit, index)
-            # Collections and large bodies need model-selected native entry groups.
-            collection = any(len(index.list_children(ref)["refs"]) > 1 for ref in unit.input_refs)
-            if not collection:
-                for ref in unit.input_refs:
-                    if "json" in index.captures[ref.capture_id].media_type:
-                        value = json.loads(index.resolve(ref))
-                        collection = isinstance(value, list) or (
-                            isinstance(value, dict)
-                            and any(isinstance(v, list) and len(v) > 1 for v in value.values())
-                        )
             prepared = (
-                await _discover(view, index, session)
-                if collection or _size(_payload([view])) > max_bytes
+                await _discover(view, index, session, exposure)
+                if _size(_payload([view])) > max_bytes
                 else [view]
             )
             for selected in prepared:
@@ -508,55 +539,26 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session) -> Pa
     results = dict(failures)
     for pack in packs:
         expected = [v.unit for v in pack]
-        prompt = _dump(_payload(pack))
-        errors = []
-        preserved = {}
-        for attempt in range(settings.correction_retries + 1):
-            try:
-                candidate = await _run(
-                    session, ParseBatchResult, SEMANTICS, prompt, correction=attempt > 0
-                )
-                errors = validate_result(candidate, expected, index)
-                for unit in expected:
-                    matches = [u for u in candidate.units if u.unit_id == unit.unit_id]
-                    if not validate_result(
-                        ParseBatchResult(batch_id=package.package_id, units=matches), [unit], index
-                    ):
-                        preserved[unit.unit_id] = matches[0]
-                if not errors:
-                    break
-                runs = getattr(session, "runs", [])
-                if runs and runs[-1].get("model_retry_prompts", 0) > 0:
-                    break
-                prompt = _dump(
-                    {
-                        "input": _payload(pack),
-                        "correction": [e.model_dump() for e in errors],
-                        "previous": candidate.model_dump(mode="json"),
-                    }
-                )
-                if len(prompt.encode()) > max_bytes:
-                    break
-            except Exception as exc:  # noqa: BLE001 - isolate provider/schema failures per unit
-                errors = [f"extraction failed: {type(exc).__name__}"]
-                break  # transport failures are never retried
-        for view in pack:
-            candidates = [preserved[view.unit.unit_id]] if view.unit.unit_id in preserved else []
-            single = ParseBatchResult(batch_id=package.package_id, units=candidates)
-            invalid = validate_result(single, [view.unit], index)
-            if invalid:
+        prompt = _dump({"batch_id": package.package_id, **_payload(pack)})
+        try:
+            exposure.reserve([record for view in pack for record in view.records])
+            session.coverage = exposure.report()
+        except ValueError as exc:
+            for view in pack:
                 results[view.unit.unit_id] = UnitResult(
                     unit_id=view.unit.unit_id,
                     input_refs=view.unit.input_refs,
                     status="failed",
-                    issues=[str(e) for e in errors] or [str(e) for e in invalid],
+                    issues=[str(exc)],
                 )
-            else:
-                result = candidates[0]
-                if view.issues:
-                    result.issues.extend(view.issues)
-                    result.status = "partial" if result.offers else "failed"
-                results[view.unit.unit_id] = result
+            continue
+        agent = session.build_agent(output_type=ParseBatchResult, instructions=SEMANTICS)
+        candidate = await run_validated(session, agent, prompt, expected, index, package.package_id)
+        for view, result in zip(pack, candidate.units, strict=True):
+            if view.issues:
+                result.issues.extend(view.issues)
+                result.status = "partial" if result.offers else "failed"
+            results[view.unit.unit_id] = result
     final = []
     for unit in units:
         children = [v for v in views if v.parent_id == unit.unit_id]

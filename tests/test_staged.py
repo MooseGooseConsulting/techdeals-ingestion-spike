@@ -1,7 +1,9 @@
 import json
-from types import SimpleNamespace
 
 import pytest
+from pydantic_ai import Agent, ToolOutput
+from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.models.function import FunctionModel
 
 from techdeals_ingestion.contracts import CaptureInput, ParseBatchResult, UnitResult, WorkPackage
 from techdeals_ingestion.evidence import EvidenceIndex
@@ -14,9 +16,24 @@ class Session:
         self.behavior = behavior
 
     def build_agent(self, **kwargs):
-        return kwargs["output_type"]
+        output_type = kwargs["output_type"]
 
-    async def run(self, agent, prompt):
+        def respond(messages, info):
+            prompt = next(
+                p.content for m in messages for p in m.parts if p.part_kind == "user-prompt"
+            )
+            value = self.output(output_type, prompt)
+            return ModelResponse(
+                parts=[ToolCallPart(info.output_tools[0].name, value.model_dump(mode="json"))]
+            )
+
+        return Agent(FunctionModel(respond), output_type=ToolOutput(output_type), retries=1)
+
+    async def run(self, agent, prompt, deps=None):
+        return await agent.run(prompt)
+
+    def output(self, agent, prompt):
+
         data = json.loads(prompt)
         self.calls.append((agent, data, len(prompt.encode())))
         if self.behavior:
@@ -24,26 +41,22 @@ class Session:
             if isinstance(value, Exception):
                 raise value
             if value is not None:
-                return SimpleNamespace(output=value)
+                return value
         if agent is Discovery:
-            return SimpleNamespace(
-                output=Discovery(
-                    refs=[
-                        {"capture_id": c["capture_id"], "locator": "$"}
-                        for c in data["overview"].get("captures", [data["overview"]])
-                    ],
-                    disposition="relevant",
-                )
+            return Discovery(
+                refs=[
+                    {"capture_id": c["capture_id"], "locator": "$"}
+                    for c in data["overview"].get("captures", [data["overview"]])
+                ],
+                disposition="relevant",
             )
         units = data.get("input", data)["units"]
-        return SimpleNamespace(
-            output=ParseBatchResult(
-                batch_id="model-id",
-                units=[
-                    UnitResult(unit_id=u["unit_id"], input_refs=u["input_refs"], status="no_offer")
-                    for u in reversed(units)
-                ],
-            )
+        return ParseBatchResult(
+            batch_id=data.get("batch_id", "p"),
+            units=[
+                UnitResult(unit_id=u["unit_id"], input_refs=u["input_refs"], status="no_offer")
+                for u in reversed(units)
+            ],
         )
 
 
@@ -87,7 +100,7 @@ async def test_missing_unit_only_fails_missing_unit(tmp_path):
     def behavior(agent, data, number):
         units = data.get("input", data)["units"]
         return ParseBatchResult(
-            batch_id="x",
+            batch_id="p",
             units=[
                 UnitResult(
                     unit_id=units[0]["unit_id"],
@@ -147,7 +160,7 @@ async def test_correction_preserves_formerly_good_unit(tmp_path):
         units = data.get("input", data)["units"]
         unit = units[0 if number == 1 else 1]
         return ParseBatchResult(
-            batch_id="x",
+            batch_id="p",
             units=[
                 UnitResult(
                     unit_id=unit["unit_id"], input_refs=unit["input_refs"], status="no_offer"
@@ -179,7 +192,7 @@ def test_html_card_selection_includes_descendant_price(tmp_path):
 async def test_discovery_groups_pack_and_merge_to_original_unit(tmp_path):
     p, index = package(
         tmp_path,
-        text=json.dumps({"products": [{"name": str(i)} for i in range(24)]}),
+        text=json.dumps({"products": [{"name": str(i), "padding": "x" * 4500} for i in range(24)]}),
         media="application/json",
     )
 
@@ -205,7 +218,13 @@ async def test_group_merge_prefixes_ids_and_remaps_price_scope(tmp_path):
     from techdeals_ingestion.contracts import Offer, Price, prepare_units
     from techdeals_ingestion.validation import validate_result
 
-    p, index = package(tmp_path, text='[{"name":"A"},{"name":"B"}]', media="application/json")
+    p, index = package(
+        tmp_path,
+        text=json.dumps(
+            [{"name": "A", "padding": "x" * 50000}, {"name": "B", "padding": "x" * 50000}]
+        ),
+        media="application/json",
+    )
 
     def behavior(agent, data, number):
         if agent is Discovery:
@@ -214,7 +233,7 @@ async def test_group_merge_prefixes_ids_and_remaps_price_scope(tmp_path):
                 groups=[[{"capture_id": "c0", "locator": f"json:/{i}"}] for i in range(2)],
             )
         return ParseBatchResult(
-            batch_id="x",
+            batch_id="p",
             units=[
                 UnitResult(
                     unit_id=u["unit_id"],
@@ -296,3 +315,34 @@ def test_actual_development_overviews_fit_single_discovery_request():
                         if r["locator"].startswith("json:")
                     }
     assert "disctech" in sizes and "spd" in sizes
+
+
+@pytest.mark.asyncio
+async def test_cumulative_prepared_exposure_stops_later_pack_before_request(tmp_path):
+    from techdeals_ingestion.settings import ParserSettings
+
+    p, index = package(tmp_path, count=2, text="x" * 1000)
+    session = Session()
+    session.settings = ParserSettings.load().model_copy(
+        update={"max_exposure_bytes": 1800, "batch_size": 1}
+    )
+    result = await parse_batch(p, index, session)
+    assert len(session.calls) == 1
+    assert [u.status for u in result.units] == ["no_offer", "failed"]
+    assert "exposure limit" in result.units[1].issues[0]
+    assert session.coverage["unique_prepared_view_bytes"] <= 1800
+
+
+def test_prepared_budget_counts_repeated_views_and_discovery_previews():
+    from techdeals_ingestion.staged import ExposureBudget
+
+    budget = ExposureBudget(100)
+    preview = {"text_preview": "α"}
+    budget.reserve([preview])
+    size = budget.unique_bytes
+    budget.reserve([preview])
+    assert budget.unique_bytes == size
+    assert budget.report()["repeated_prepared_view_bytes"] == size
+    with pytest.raises(ValueError, match="exposure limit"):
+        budget.reserve([{"text": "x" * 100}])
+    assert budget.total_bytes == size * 2

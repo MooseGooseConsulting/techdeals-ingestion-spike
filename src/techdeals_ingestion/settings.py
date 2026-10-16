@@ -16,6 +16,7 @@ class ParserSettings(BaseModel):
     batch_size: int = Field(gt=0)
     max_prepared_bytes: int = Field(gt=0)
     max_package_bytes: int = Field(gt=0)
+    max_exposure_bytes: int = Field(default=512 * 1024, gt=0)
     tool_page_bytes: int = Field(gt=0)
     max_requests: int = Field(gt=0)
     max_tool_calls: int = Field(gt=0)
