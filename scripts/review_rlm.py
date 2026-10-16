@@ -15,7 +15,6 @@ from pathlib import Path
 
 from techdeals_ingestion.rlm_review import record_rlm_run, render_review
 
-
 TASK = """Analyze the source material using your Python REPL. Discover EVERY
 independently purchasable item or configuration in the supplied source captures.
 One post may contain multiple offers; several captures may describe one listing.
