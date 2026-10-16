@@ -190,3 +190,51 @@ async def test_discovery_groups_pack_and_merge_to_original_unit(tmp_path):
     assert [len(call[1]["units"]) for call in session.calls[1:]] == [8, 8, 8]
     assert [u.unit_id for u in result.units] == ["c0"]
     assert result.units[0].status == "no_offer"
+
+
+@pytest.mark.asyncio
+async def test_group_merge_prefixes_ids_and_remaps_price_scope(tmp_path):
+    from techdeals_ingestion.contracts import Offer, Price, prepare_units
+    from techdeals_ingestion.validation import validate_result
+
+    p, index = package(tmp_path, text='[{"name":"A"},{"name":"B"}]', media="application/json")
+
+    def behavior(agent, data, number):
+        if agent is Discovery:
+            return Discovery(
+                disposition="relevant",
+                groups=[[{"capture_id": "c0", "locator": f"json:/{i}"}] for i in range(2)],
+            )
+        return ParseBatchResult(
+            batch_id="x",
+            units=[
+                UnitResult(
+                    unit_id=u["unit_id"],
+                    input_refs=u["input_refs"],
+                    status="complete",
+                    offers=[
+                        Offer(
+                            local_id="offer",
+                            evidence=u["input_refs"],
+                            prices=[
+                                Price(
+                                    local_id="price",
+                                    kind="ask",
+                                    amount="10",
+                                    scope_refs=["offer"],
+                                    evidence=u["input_refs"],
+                                )
+                            ],
+                        )
+                    ],
+                )
+                for u in data["units"]
+            ],
+        )
+
+    result = await parse_batch(p, index, Session(behavior))
+    offers = result.units[0].offers
+    assert len(offers) == 2
+    assert len({o.local_id for o in offers}) == 2
+    assert all(o.prices[0].scope_refs == [o.local_id] for o in offers)
+    assert validate_result(result, prepare_units(p), index) == []
