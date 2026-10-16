@@ -4,6 +4,9 @@ Turn heterogeneous hardware listings into a database that other agents can
 query, relate, and tally for their analysis. Preserve the source, what a purchase
 includes, what its price covers, and what changes over time.
 
+Inputs come from multiple scrapers, APIs, feeds, browser collectors, and exports.
+Bright Data is one collection option among them.
+
 This is a fresh implementation repository. The owner requested it after the
 previous work failed to demonstrate the useful application they expected.
 Existing TechDeals implementations are not the starting architecture here.

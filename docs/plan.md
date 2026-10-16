@@ -38,6 +38,9 @@ of examples and the size of the first slice have not been settled with the owner
 
 Use the [data contract](data-contract.md) for scraped fields, record transformation,
 date meanings, parsing, identity, deduplication, and possible scraper changes.
+Support input from multiple collectors through their actual field mappings;
+Bright Data-specific metadata is not required of other scrapers. Keep original
+source identity separate from collection method, including for deduplication.
 Its [rescrape cases](data-contract.md#listing-identity-and-repeated-scrapes) are
 part of the first working delivery. Select the open design choices there before
 finalizing the schema or collector output.
@@ -52,6 +55,11 @@ finalizing the schema or collector output.
    they exercise different purchase structures. Record the exact source
    excerpts needed to explain the expected answers alongside those examples.
    Preserve missing dates and contradictions explicitly.
+
+   Include different acquisition methods in the first delivery, including an
+   existing route independent of Bright Data. Confirm how each capture was
+   obtained, then identify its native fields and metadata; source diversity
+   alone does not establish collector diversity.
 
    Done when each capture has a short, independently inspected description of
    what is offered, its contents/counts, the stated amounts, and unknowns.
@@ -134,7 +142,8 @@ each extension small enough to demonstrate through the same agent query path.
    from a real buying question; no arbitrary division or component valuation
    machinery is assumed.
 4. **Routine intake.** Connect an existing scraper's retained capture output to
-   the demonstrated path. Preserve its source identity and time semantics.
+   the demonstrated path, then extend the source mappings across the other
+   collectors. Preserve source identity and time semantics across collection methods.
    Address actual acquisition gaps only after confirming what the existing
    collectors provide. Legacy corpus migration comes after the new path works.
 
