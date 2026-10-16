@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from techdeals_ingestion.contracts import CaptureInput, WorkPackage, prepare_units
-from techdeals_ingestion.storage import _rebind, semantic_key
+from techdeals_ingestion.storage import _meaning, _rebind, semantic_key
 
 
 def test_reuse_key_excludes_acquisition_but_preserves_context(tmp_path):
@@ -77,3 +77,55 @@ def test_source_date_changes_affect_meaning_but_evidence_ids_do_not():
     assert _meaning(first) != _meaning(later)
     rebound = _rebind(first, {"a": "b"})
     assert _meaning(first) == _meaning(rebound)
+
+
+def test_meaning_normalizes_local_graph_ids_but_preserves_scope_and_relationships():
+    from techdeals_ingestion.contracts import Item, Offer, Price, Relationship
+    from techdeals_ingestion.storage import _meaning
+
+    def offer(prefix, reverse=False, price_target="cpu"):
+        items = [
+            Item(local_id=prefix + name, title=name, role="offered") for name in ["cpu", "ram"]
+        ]
+        return Offer(
+            local_id=prefix + "offer",
+            items=list(reversed(items)) if reverse else items,
+            prices=[
+                Price(
+                    local_id=prefix + "price",
+                    amount="10",
+                    kind="ask",
+                    scope_refs=[prefix + price_target],
+                )
+            ],
+            relations=[
+                Relationship(
+                    subject_ref=prefix + "cpu", predicate="includes", object_ref=prefix + "ram"
+                )
+            ],
+        ).model_dump(mode="json")
+
+    first = offer("first-")
+    renamed = offer("second-", reverse=True)
+    assert _meaning(first) == _meaning(renamed)
+    assert _meaning(first) != _meaning(offer("third-", price_target="ram"))
+    renamed["relations"][0]["object_ref"] = "second-offer"
+    assert _meaning(first) != _meaning(renamed)
+
+
+def test_meaning_preserves_native_json_and_identical_item_self_relationships():
+    import copy
+
+    from techdeals_ingestion.contracts import Fact, Item, Offer, Relationship
+
+    data = {"local_id": "native-identifier", "evidence": "native-source-value"}
+    fact = Fact(name="native", value=data).model_dump(mode="json")
+    assert _meaning(fact)["value"] == data
+    offer = Offer(
+        local_id="offer",
+        items=[Item(local_id=name, title="identical", role="included") for name in ("a", "b")],
+        relations=[Relationship(subject_ref="a", predicate="paired_with", object_ref="b")],
+    ).model_dump(mode="json")
+    self_linked = copy.deepcopy(offer)
+    self_linked["relations"][0]["object_ref"] = "a"
+    assert _meaning(offer) != _meaning(self_linked)

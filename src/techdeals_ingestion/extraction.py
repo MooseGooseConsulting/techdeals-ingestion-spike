@@ -23,7 +23,17 @@ async def run_validated(session, agent, prompt, units, index, batch_id, deps=Non
             matches = [u for u in output.units if u.unit_id == expected.unit_id]
             candidate = ParseBatchResult(batch_id=batch_id, units=matches)
             if not validate_result(candidate, [expected], index):
-                accepted.setdefault(expected.unit_id, matches[0].model_copy(deep=True))
+                unit = matches[0]
+                prior = accepted.get(expected.unit_id)
+                if prior is not None:
+                    if prior.status in ("complete", "no_offer") and unit.status in (
+                        "partial",
+                        "failed",
+                    ):
+                        continue
+                    if prior.status == "partial" and unit.status == "failed":
+                        continue
+                accepted[expected.unit_id] = unit.model_copy(deep=True)
         present = {unit.unit_id for unit in output.units}
         combined = output.model_copy(
             update={

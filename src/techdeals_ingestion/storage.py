@@ -25,6 +25,7 @@ VIEWS = frozenset(
         "undated_evidence",
         "unresolved_entries",
         "ingestion_failures",
+        "ingestion_outcomes",
     }
 )
 
@@ -67,12 +68,56 @@ def _rebind(value, mapping):
 
 
 def _meaning(value):
-    """Compare asserted meaning independently of changing evidence capture locators."""
+    """Compare asserted meaning without evidence handles or model-assigned IDs."""
     if isinstance(value, dict):
-        return {k: _meaning(v) for k, v in value.items() if k not in {"evidence", "identity_claim"}}
+        if {"local_id", "items", "prices", "relations"} <= value.keys():
+            return _offer_meaning(value)
+        return {
+            k: v if k == "value" else _meaning(v)
+            for k, v in value.items()
+            if k not in {"evidence", "identity_claim", "local_id"}
+        }
     if isinstance(value, list):
         return [_meaning(v) for v in value]
     return value
+
+
+def _offer_meaning(offer):
+    # Scope and relationship targets are substantive. Replace their arbitrary
+    # names with the target's asserted content, rather than discarding the refs.
+    targets = {offer["local_id"]: ["offer"]}
+    targets.update({item["local_id"]: ["item", _meaning(item)] for item in offer["items"]})
+
+    def target(ref):
+        return targets.get(ref, ["unresolved", ref])
+
+    def ordered(values):
+        return sorted(values, key=lambda value: json.dumps(value, sort_keys=True, default=str))
+
+    result = {
+        k: _meaning(v)
+        for k, v in offer.items()
+        if k not in {"local_id", "evidence", "identity_claim", "items", "prices", "relations"}
+    }
+    result["items"] = ordered([_meaning(item) for item in offer["items"]])
+    result["prices"] = ordered(
+        [
+            {**_meaning(price), "scope_refs": ordered([target(ref) for ref in price["scope_refs"]])}
+            for price in offer["prices"]
+        ]
+    )
+    result["relations"] = ordered(
+        [
+            {
+                **_meaning(relation),
+                "subject_ref": target(relation["subject_ref"]),
+                "object_ref": target(relation["object_ref"]),
+                "self_reference": relation["subject_ref"] == relation["object_ref"],
+            }
+            for relation in offer["relations"]
+        ]
+    )
+    return result
 
 
 class Store:
@@ -86,6 +131,16 @@ class Store:
     def migrate(self):
         with self.connect() as conn:
             conn.execute(Path(__file__).with_name("schema.sql").read_text())
+            # Upgrade derived comparisons while retaining original payloads/evidence.
+            for row in conn.execute(
+                "SELECT result_id,local_id,payload,semantic_payload FROM offers"
+            ).fetchall():
+                meaning = _meaning(row["payload"])
+                if meaning != row["semantic_payload"]:
+                    conn.execute(
+                        "UPDATE offers SET semantic_payload=%s WHERE result_id=%s AND local_id=%s",
+                        (Jsonb(meaning), row["result_id"], row["local_id"]),
+                    )
 
     def retain_package(self, package, index=None):
         """Commit bytes before preparation or inference; conflicting capture IDs are errors."""

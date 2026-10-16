@@ -108,3 +108,31 @@ async def test_valid_unit_survives_transport_failure_without_raw_error(tmp_path)
     assert [u.status for u in output.units] == ["no_offer", "failed"]
     assert "private provider" not in output.model_dump_json()
     assert "RuntimeError" in output.units[1].issues[-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_status", ["partial", "failed"])
+async def test_same_run_correction_can_improve_a_previous_incomplete_unit(tmp_path, initial_status):
+    p, index = package(tmp_path, count=2)
+    units = prepare_units(p)
+    calls = []
+
+    def respond(messages, info):
+        calls.append(1)
+        output = ParseBatchResult(
+            batch_id="p",
+            units=[
+                UnitResult(
+                    unit_id=unit.unit_id,
+                    input_refs=unit.input_refs,
+                    status=initial_status if len(calls) == 1 else "no_offer",
+                )
+                for unit in (units[:1] if len(calls) == 1 else units)
+            ],
+        )
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output.model_dump())])
+
+    session = Session(respond)
+    output = await parse_direct(p, index, session)
+    assert [unit.status for unit in output.units] == ["no_offer", "no_offer"]
+    assert session.runs == 1 and len(calls) == 2

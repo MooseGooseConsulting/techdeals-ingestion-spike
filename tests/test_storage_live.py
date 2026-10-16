@@ -328,14 +328,14 @@ def test_equal_time_conflicts_and_selected_reuse(store, tmp_path):
             status=status,
             offers=[
                 Offer(
-                    local_id="offer",
+                    local_id="offer" + suffix,
                     evidence=[r],
                     prices=[
                         Price(
-                            local_id="price",
+                            local_id="price" + suffix,
                             amount=Decimal(amount),
                             kind="ask",
-                            scope_refs=["offer"],
+                            scope_refs=["offer" + suffix],
                             evidence=[r],
                         )
                     ],
@@ -535,3 +535,44 @@ def test_partial_rerun_and_newer_partial_preserve_complete_state(store, tmp_path
     assert len(store.query("listing_changes", experiment_id=token)) == 1
     store.migrate()  # Existing views and their dependents must update repeatably.
     assert store.query("current_listings", experiment_id=token)[0] == original
+
+
+def test_no_offer_outcome_is_queryable_without_a_listing(store, tmp_path):
+    token = uuid4().hex
+    path = tmp_path / "notice"
+    path.write_text("No products for sale")
+    capture = CaptureInput(
+        capture_id=token,
+        acquisition_key=token,
+        path=path,
+        media_type="text/plain",
+        retrieved_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    ref = EvidenceRef(capture_id=token, locator="$")
+    report = store.publish(
+        WorkPackage(package_id=token, captures=[capture]),
+        ParseBatchResult(
+            batch_id=token,
+            units=[
+                UnitResult(
+                    unit_id=token,
+                    input_refs=[ref],
+                    status="no_offer",
+                    issues=["No offer in source"],
+                )
+            ],
+        ),
+        EvidenceIndex([capture]),
+        token,
+        "a",
+        token,
+    )
+    assert report["published_units"] == 1
+    assert not store.query("listing_sightings", experiment_id=token)
+    rows = store.query("ingestion_outcomes", experiment_id=token, arm="a")
+    assert len(rows) == 1
+    assert rows[0]["status"] == "no_offer"
+    assert rows[0]["unit_payload"]["issues"] == ["No offer in source"]
+    assert rows[0]["observed_at"] == capture.retrieved_at
+    assert rows[0]["input_capture_ids"] == [token]
+    assert not store.query("ingestion_failures", experiment_id=token)

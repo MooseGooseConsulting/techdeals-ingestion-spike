@@ -55,6 +55,12 @@ CREATE OR REPLACE VIEW ingestion_failures AS
  SELECT a.attempt_key,a.package_id,a.experiment_id,a.arm,a.created_at,
         e.value->>'unit_id' AS unit_id,e.value->>'error' AS error,a.result AS attempt_payload
  FROM attempts a CROSS JOIN LATERAL jsonb_array_elements(a.errors) e(value);
+-- Accepted unit outcomes remain queryable even when no offer row was produced.
+CREATE OR REPLACE VIEW ingestion_outcomes AS
+ SELECT i.result_id,i.observation_id,i.experiment_id,i.arm,i.unit_id,i.input_capture_ids,
+ i.payload->>'status' AS status,i.payload AS unit_payload,ob.observed_at,ob.time_status,i.reused_from
+ FROM interpretations i JOIN accepted a ON a.result_id=i.result_id
+ JOIN observations ob ON ob.observation_id=i.observation_id;
 CREATE OR REPLACE VIEW listing_sightings AS
  SELECT o.*, i.observation_id,i.experiment_id,i.arm,i.unit_id,i.input_capture_ids,
  ob.observed_at,ob.time_status,i.payload AS unit_payload,i.reused_from
