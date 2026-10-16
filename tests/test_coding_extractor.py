@@ -142,7 +142,7 @@ from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument("--manifest");p.add_argument("--output");a=p.parse_args()
 Path(a.output).write_text(json.dumps({"entries":[{"native_id":"101","variant_id":"201","source_refs":[{"input_id":"spd"}],"prices":[{"kind":"ask","amount":"14.99","original":"14.99","currency":None}]}],"issues":[]}))
 """)
-    result = harness.evaluate(workspace)
+    result = harness.evaluate(workspace, repo_root=root)
     assert not result["passed"]
     assert "Metamorphic test failed" in " ".join(result["errors"])
 
