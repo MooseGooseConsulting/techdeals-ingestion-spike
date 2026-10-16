@@ -8,13 +8,20 @@ This is a fresh implementation repository. The owner requested it after the
 previous work failed to demonstrate the useful application they expected.
 Existing TechDeals implementations are not the starting architecture here.
 
-Start with the [problems and required outcomes](docs/problems.md), then read the
-[implementation plan](docs/plan.md). Its proposed first milestone
-is one working path from varied real captures through batched free-model
-interpretation and database storage to information other agents can query.
+The project documents have separate responsibilities:
+
+| Document | Purpose |
+|---|---|
+| [Problems and required outcomes](docs/problems.md) | What needs solving and what the resulting database must support |
+| [Data contract](docs/data-contract.md) | Scraped fields, transformation into records, dates, parsing, identity, deduplication, and scraper output |
+| [Implementation plan](docs/plan.md) | The proposed work order and how each problem will be addressed |
+
+Read them in that order. The proposed first delivery is one working path from
+varied real captures through interpretation and storage to information other
+agents can query, including dates and correct rescrape handling.
 
 The intended destination is an improvement to the main TechDeals project after
 the behavior has been demonstrated. Organization ownership or a successful
 model request does not establish that result.
 
-Current state: initial plan only; implementation has not started.
+Current state: draft requirements and design documents; implementation has not started.

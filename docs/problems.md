@@ -25,9 +25,10 @@ database personally. A fixed menu of human-facing buying questions does not
 define the scope. The data must be understandable from its documented structure
 and meanings without depending on the ingestion agent's conversation history.
 
-The [implementation plan](plan.md) describes how we propose to address these
-problems. Its sequence and technical choices can change as we learn; the
-required outcomes below remain the work to accomplish.
+The [data contract](data-contract.md) describes the proposed handling of scraped
+records, dates, parsing, identity, and deduplication. The [implementation plan](plan.md)
+describes how we propose to address these problems. Design and sequence can
+change as we learn; the required outcomes below remain the work to accomplish.
 
 ## P1. Heterogeneous information
 
