@@ -12,7 +12,7 @@ from pathlib import Path
 
 from openai import APIConnectionError
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, capture_run_messages
+from pydantic_ai import Agent, NativeOutput, capture_run_messages
 from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 from pydantic_ai.models.openrouter import OpenRouterModel
@@ -23,7 +23,8 @@ class Product(BaseModel):
     sku: str
     price: Decimal
     currency: str | None = Field(
-        description="Currency explicitly stated in the source, otherwise JSON null."
+        pattern=r"^[A-Z]{3}$",
+        description="Currency code stated in the source, otherwise JSON null.",
     )
     published_at: datetime
 
@@ -33,8 +34,11 @@ async def main():
     destination.mkdir(parents=True)
     source = Path("corpus/native/small-a/small-spd.json").read_text()
     agent = Agent(
-        OpenRouterModel("nvidia/nemotron-3-super-120b-a12b:free"),
-        output_type=Product,
+        OpenRouterModel(
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            profile={"supports_json_schema_output": True},
+        ),
+        output_type=NativeOutput(Product, template="Extract into this JSON schema:\n{schema}"),
         instructions=(
             "Extract the product and its first variant price and SKU. "
             "Preserve the publication date and timezone. "

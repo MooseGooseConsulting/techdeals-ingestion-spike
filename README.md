@@ -18,8 +18,8 @@ framework have been removed. The corpus and its provenance stay.
 
 The stack is Python 3.12, PydanticAI, Pydantic, psycopg, PostgreSQL, uv, pytest
 and Ruff. Beautiful Soup checks optional HTML locators. The committed model is
-`nvidia/nemotron-3.5-lightning:free` through OpenRouter, with reasoning enabled,
-at most one correction, and no alternative-model fallback. Model selection is
+`nvidia/nemotron-3-super-120b-a12b:free` through OpenRouter, with reasoning enabled,
+native JSON-schema output, at most one correction, and no alternative-model fallback. Model selection is
 in `config/parser.toml`. Credentials enter through Doppler-injected process
 environment; the application does not load `.env` files.
 
@@ -47,7 +47,7 @@ python scripts/with_doppler.py uv run techdeals-ingest ingest \
 
 Omit retrieval time when unknown. File modification time is never promoted to
 market observation time. The command retains bytes before inference. Output
-includes `result.json`, `report.json`, SDK messages in `trace/`, and actual
+includes `result.json`, `report.json`, SDK messages and incremental reasoning/output events in `trace/`, and actual
 attempt-scoped `database-entries.json` and `database-prices.json`. A schema pass
 or an empty issues list does not establish factual correctness. Reports with
 issues return a nonzero exit status while retaining useful extracted entries.
@@ -99,29 +99,41 @@ PYDANTIC_AI_NO_BANNER=1 doppler run --project ai-automation --config dev -- \
 ```
 
 Each run keeps its output and complete SDK conversation in a new directory under
-`.runs/basic-product/`. Real calls returned typed output in about 7–8 seconds.
-The first call returned all five fields correctly. Repeats returned the text
-`"None"` for absent currency instead of JSON `null`, despite the nullable schema
-and explicit instruction. Those are extraction failures: a schema-valid string
-is not evidence of a stated currency. No correction or missing-value conversion
-hides that behavior in this example.
+`.runs/basic-product/`. Initial tool-output calls returned typed output in about
+7–8 seconds, but repeats encoded absent currency as the string `"None"`. Inspection
+of both model reasoning and raw HTTP showed correct reasoning about the missing
+currency followed by a string in the returned tool arguments. Pydantic received
+that string unchanged.
+
+A native JSON-schema output call on the same source returned actual JSON `null`.
+The example now uses that standard PydanticAI mode with its schema-prompt
+template, so the model sees the field contract as well as being constrained by it. A nullable three-letter code
+constraint catches malformed currency text without filling or guessing currency;
+it does not prove that a syntactically valid code is supported by the source.
+The configured model's native-output capability is explicit because the pinned
+SDK's default profile does not recognize it; the capability was checked against
+OpenRouter metadata and a real request.
 
 A separate direct OpenAI SDK call to OpenRouter, without PydanticAI, returned
 `KEY_OK` in 3.97 seconds using that same free model and the existing Doppler key.
 This verifies authentication and a working completion route; it does not prove
-full ingestion. The full parser still has its separately committed configuration.
+full ingestion. The runtime now uses that working free route as well.
 
 ## Demonstration status
 
-The first replacement-runtime `small-a` run (two complete native captures,
-11,584 bytes) timed out at the configured 90-second limit before the model
-returned extraction output. Neon retained both inputs and the failed attempt;
-zero entries were produced in that run. The subsequent single-record call
-(2,494 native bytes) also timed out at 90 seconds without output. An explicit
-parser-only trial of the free `poolside/laguna-xs-2.1:free` route returned HTTP
-429. That trial did not change the committed Lightning configuration. Useful
-live extraction is still unproven; storage tests do not substitute for it. Offline and explicit live SQL tests check
-application mechanics; they do not certify model extraction quality.
+The OpenRouter key and free Nemotron Super route are verified by direct completion
+and typed extraction calls. Native output returns real JSON nulls. Streaming
+reasoning/output events and the final transcript are retained; outgoing request
+JSON is captured before transmission without authentication headers.
+
+The expanded single-product trial now fills the named title, IDs, SKU,
+description and availability, and correctly leaves unsupported seller/location/
+condition/currency null. It still returned a null numeric amount despite copying
+`14.99` as price text, and flattened only the three product dates while nested
+dates remained in attributes or were omitted. That trial is not accepted as a
+useful complete extraction. Cross-field consistency and nested-date extraction
+are being corrected before the multi-product demonstration. Earlier route
+failures remain in local run artifacts. No storage test establishes model quality.
 
 All frozen captures currently have unknown trusted retrieval times. Do not
 label them current market observations. The full 24-product HTML capture is

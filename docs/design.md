@@ -101,7 +101,11 @@ bytes separately and present labelled native source blocks or actual JSON values
 Use the existing free-model configuration with reasoning enabled and Doppler
 credentials. Model availability and suitability still need live proof. Do not
 turn provider failures or bad model output into success by weakening checks.
-Capture requests, responses and correction messages for inspection.
+Capture requests, responses and correction messages for inspection. Persist
+model-returned reasoning and output deltas as they arrive through PydanticAI
+streaming events, including partial streams when a request fails. Record elapsed
+times and SDK usage alongside the final transcript. Missing scalar fields are
+JSON null; empty source-supported collections remain empty collections.
 
 Start with the two existing native examples, then a real source containing
 multiple separately priced entries. For each, inspect item/price association,
