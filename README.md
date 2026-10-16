@@ -126,14 +126,18 @@ and typed extraction calls. Native output returns real JSON nulls. Streaming
 reasoning/output events and the final transcript are retained; outgoing request
 JSON is captured before transmission without authentication headers.
 
-The expanded single-product trial now fills the named title, IDs, SKU,
-description and availability, and correctly leaves unsupported seller/location/
-condition/currency null. It still returned a null numeric amount despite copying
-`14.99` as price text, and flattened only the three product dates while nested
-dates remained in attributes or were omitted. That trial is not accepted as a
-useful complete extraction. Cross-field consistency and nested-date extraction
-are being corrected before the multi-product demonstration. Earlier route
-failures remain in local run artifacts. No storage test establishes model quality.
+The latest expanded single-product run returned the title, native and variant
+IDs, SKU, original truncated description, availability and a `14.99` price with
+null currency. Unsupported seller/location/condition remained null. It took two
+model requests and 57.018 seconds, with reported cost zero. Five date occurrences
+were extracted; the source contains eleven, so date coverage remains incomplete.
+Multi-product extraction and the updated parser-to-SQL path have not been
+demonstrated. This is a work-in-progress handoff, not a completed or approved
+architecture. The owner has stopped further implementation pending design review.
+
+Local artifacts from that run are under `.runs/expanded-spd-checked/` (result,
+request JSON, streamed events, and final transcript). They remain ignored runtime
+artifacts. The corpus is committed and unchanged.
 
 All frozen captures currently have unknown trusted retrieval times. Do not
 label them current market observations. The full 24-product HTML capture is
