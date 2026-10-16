@@ -153,8 +153,23 @@ class PreparedUnit(Contract):
 
 
 def prepare_units(package: WorkPackage) -> list[PreparedUnit]:
-    groups: dict[str, list[EvidenceRef]] = {}
+    groups: dict[tuple[str, str], list[EvidenceRef]] = {}
     for capture in package.captures:
-        key = capture.linked_group or capture.capture_id
+        key = (
+            ("group", capture.linked_group)
+            if capture.linked_group
+            else ("capture", capture.capture_id)
+        )
         groups.setdefault(key, []).append(EvidenceRef(capture_id=capture.capture_id, locator="$"))
-    return [PreparedUnit(unit_id=key, input_refs=refs) for key, refs in groups.items()]
+    names = [name for _, name in groups]
+    reserved = set(names)
+    units = []
+    for (kind, name), refs in groups.items():
+        unit_id = name
+        if names.count(name) > 1:
+            unit_id = f"{kind}:{name}"
+            while unit_id in reserved:
+                unit_id = ":" + unit_id
+        reserved.add(unit_id)
+        units.append(PreparedUnit(unit_id=unit_id, input_refs=refs))
+    return units

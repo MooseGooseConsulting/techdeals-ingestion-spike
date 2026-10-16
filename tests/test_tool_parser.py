@@ -8,6 +8,7 @@ from pydantic_ai.models.function import FunctionModel
 from techdeals_ingestion.contracts import (
     CaptureInput,
     EvidenceRef,
+    Offer,
     ParseBatchResult,
     UnitResult,
     WorkPackage,
@@ -124,6 +125,13 @@ async def test_child_reads_allow_complete_and_metadata_survives_repair(tmp_path)
                         unit_id=cid,
                         input_refs=[EvidenceRef(capture_id=cid, locator="$")],
                         status="complete",
+                        offers=[
+                            Offer(
+                                local_id="offer",
+                                title="A",
+                                evidence=[EvidenceRef(capture_id=cid, locator="json:/title")],
+                            )
+                        ],
                     )
                 ],
             )

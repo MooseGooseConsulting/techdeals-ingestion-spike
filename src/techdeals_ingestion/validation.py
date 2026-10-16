@@ -39,24 +39,34 @@ def validate_result(
             )
 
         def check_refs(value, here, allowed=allowed):
-            if isinstance(value, dict):
-                if set(value) == {"capture_id", "locator"}:
-                    ref = EvidenceRef.model_validate(value)
-                    if ref.capture_id not in allowed:
-                        issue("capture_scope", here, ref.capture_id)
-                    else:
-                        try:
-                            index.resolve(ref)
-                        except KeyError:
-                            issue("unresolved_evidence", here, str(value))
+            if isinstance(value, EvidenceRef):
+                if value.capture_id not in allowed:
+                    issue("capture_scope", here, value.capture_id)
                 else:
-                    for key, child in value.items():
-                        check_refs(child, here + "/" + key)
+                    try:
+                        index.resolve(value)
+                    except KeyError:
+                        issue("unresolved_evidence", here, str(value))
+            elif isinstance(value, Contract):
+                for key in type(value).model_fields:
+                    # Fact.value is arbitrary source JSON, never a citation container.
+                    if isinstance(value, Fact) and key == "value":
+                        continue
+                    check_refs(getattr(value, key), here + "/" + key)
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    check_refs(child, here + "/" + key)
             elif isinstance(value, list):
                 for i, child in enumerate(value):
                     check_refs(child, here + "/" + str(i))
 
-        check_refs(unit.model_dump(mode="json"), path)
+        check_refs(unit, path)
+        if unit.status == "complete" and not unit.offers:
+            issue(
+                "invalid_disposition",
+                path,
+                "complete requires offers; use no_offer, failed or partial for an empty result",
+            )
         if unit.status in ("no_offer", "failed") and unit.offers:
             issue(
                 "invalid_disposition",

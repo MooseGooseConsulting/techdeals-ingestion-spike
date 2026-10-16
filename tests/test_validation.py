@@ -31,7 +31,7 @@ def unit(cid):
     return {
         "unit_id": cid,
         "input_refs": [{"capture_id": cid, "locator": "$"}],
-        "status": "complete",
+        "status": "partial",
         "offers": [],
     }
 
@@ -224,3 +224,71 @@ def test_named_columns_require_evidence_for_values(tmp_path):
         ("missing_fact_evidence", "units/0/offers/o/fields/seller"),
         ("missing_fact_evidence", "units/0/offers/o/fields/available_quantity"),
     }
+
+
+def test_linked_group_name_does_not_join_independent_capture(tmp_path):
+    def capture(cid, group=None):
+        return CaptureInput(
+            capture_id=cid,
+            acquisition_key=cid,
+            path=tmp_path / cid,
+            media_type="text/plain",
+            linked_group=group,
+        )
+
+    package = WorkPackage(
+        package_id="p",
+        captures=[
+            capture("one", "shared"),
+            capture("two", "shared"),
+            capture("shared"),
+            capture("group:shared"),
+            capture(":group:shared"),
+            capture("capture:shared"),
+            capture("ordinary"),
+        ],
+    )
+    units = prepare_units(package)
+    by_members = {tuple(r.capture_id for r in u.input_refs): u.unit_id for u in units}
+    assert len(units) == 6
+    assert len({u.unit_id for u in units}) == 6
+    assert by_members[("one", "two")] == "::group:shared"
+    assert by_members[("shared",)] == ":capture:shared"
+    for name in ["group:shared", ":group:shared", "capture:shared", "ordinary"]:
+        assert by_members[(name,)] == name
+    assert prepare_units(package) == units
+
+
+def test_citation_shaped_source_json_is_not_a_reference(tmp_path):
+    units, index = setup(tmp_path)
+    a = unit("a")
+    a["offers"] = [
+        {
+            "local_id": "o",
+            "additional_facts": {
+                "source_object": {
+                    "name": "source_object",
+                    "value": {"capture_id": "not-allowed", "locator": "json:/missing"},
+                    "evidence": [{"capture_id": "a", "locator": "$"}],
+                },
+            },
+        }
+    ]
+    result = ParseBatchResult(batch_id="x", units=[a, unit("b")])
+    assert not validate_result(result, units, index)
+    result.units[0].offers[0].additional_facts["source_object"].evidence[
+        0
+    ].locator = "json:/missing"
+    issues = validate_result(result, units, index)
+    assert {i.code for i in issues} == {"unresolved_evidence"}
+
+
+@pytest.mark.parametrize("status", ["complete", "no_offer", "failed", "partial"])
+def test_empty_extraction_requires_explicit_disposition(tmp_path, status):
+    units, index = setup(tmp_path)
+    a = unit("a")
+    a["status"] = status
+    result = ParseBatchResult(batch_id="x", units=[a, unit("b")])
+    issues = validate_result(result, units, index)
+    assert {i.code for i in issues} == ({"invalid_disposition"} if status == "complete" else set())
+    assert result.units[0].status == status
