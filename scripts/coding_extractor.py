@@ -581,9 +581,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(prepare(args.repo_root, args.case, args.workspace), indent=2))
         return 0
     if args.command == "evaluate":
-        report = evaluate(
-            args.workspace, repo_root=args.repo_root, mutation=not args.no_mutation
-        )
+        report = evaluate(args.workspace, repo_root=args.repo_root, mutation=not args.no_mutation)
         print(json.dumps(report, indent=2))
         return 0 if report["passed"] else 1
     if args.rounds < 1 or args.timeout < 1:
