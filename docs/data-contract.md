@@ -7,6 +7,25 @@ The [problems document](problems.md) explains what needs solving. This document
 describes what scraped information means and how ingestion should handle it.
 The [plan](plan.md) sets the implementation sequence.
 
+## Sources and collection methods
+
+Information arrives through multiple existing scrapers and collection methods:
+direct site/API requests, feeds such as RSS/Atom, HTML or browser collectors,
+structured catalog responses, saved exports, and services such as Bright Data.
+Bright Data is one acquisition option, including custom scrapers; its response
+format and dataset/snapshot identifiers are not a universal intake requirement.
+
+Distinguish the original source from the method used to collect it. The same
+eBay listing remains the same source listing whether collected by a local
+scraper, a prebuilt service, or a custom collector. Keep the collector and its
+run metadata as provenance without making that route the listing's identity.
+
+Each implemented input mapping must establish the source's item/variant keys,
+field meanings, actual collection method, date semantics, and failure behavior.
+Preserve the native payload. Map it to the shared database behavior described
+here without requiring every scraper to emit identical native fields. A JSON
+file alone does not establish how its contents were acquired.
+
 ## What comes in
 
 Retain the scraped item, prices, currency, location, seller, condition,
@@ -20,8 +39,9 @@ record while exposing the useful individual entries and their associations.
 
 ## From a source record to stored information
 
-The inspected eBay capture for listing `127932828201` illustrates the mapping.
-These are example meanings, not final database column names:
+The inspected eBay capture for listing `127932828201` illustrates one input
+mapping. Its provider-specific fields do not define the contract for other
+collectors. These are example meanings, not final database column names:
 
 | Source field | Value in the saved capture | Meaning to retain |
 |---|---|---|
@@ -130,11 +150,11 @@ missing field does not by itself establish a real deletion or stock change.
 
 ## Scraper output is part of the design
 
-Inspect what existing collectors already supply and shape the intake around the
-actual source data. Where an output is missing necessary fields or has unclear
-time/identity semantics, consider a targeted change or a custom Bright Data
-scraper. The owner explicitly identified this option; existing output formats
-are not immutable. Bright Data's [Scraper Studio](https://docs.brightdata.com/datasets/scraper-studio/faqs)
+Inspect what each existing collector supplies and define its input mapping.
+Where necessary fields or time/identity semantics are missing, consider a
+targeted collector change. A custom Bright Data scraper is an available option
+for suitable sources; other sources can keep their own acquisition methods.
+Existing output formats can be improved. Bright Data's [Scraper Studio](https://docs.brightdata.com/datasets/scraper-studio/faqs)
 supports building custom scrapers.
 
 Specify stable listing and variant IDs where supplied by the site, source URL,

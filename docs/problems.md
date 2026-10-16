@@ -36,6 +36,11 @@ A standalone part, a configured server, a lot, and a multi-item sale post
 describe hardware and purchases differently. Flattening them into the same
 record can erase the differences needed to understand or compare them.
 
+The information also comes through many different scrapers, APIs, feeds,
+HTML/browser collectors, and exports. Bright Data is one possible collection
+method. Intake must preserve and organize information across these routes
+without assuming a single provider's fields or response format.
+
 **Required result:** other agents can retrieve, sort, query, and tally useful
 information from these different structures together while retaining the context
 that determines what each item and purchase means. This must work across varied
@@ -140,9 +145,10 @@ schema or forcing unlike configurations into the same comparison.
 
 ## Working boundaries
 
-Use batched free-model parsing. Existing captured evidence provides the starting
-material. The scraper output can also be improved, including with a custom
-Bright Data scraper, to supply the fields and collection metadata we need.
+Use batched free-model parsing. Existing captured evidence from the different
+collectors provides the starting material. Their outputs can be improved where
+needed. A custom Bright Data scraper is one available option; each source can
+use the collection method appropriate to it.
 Broad legacy migration waits until the new path works. Development
 must protect the existing cluster and production data. Production incorporation
 follows demonstration of useful behavior and review of the affected consumers
