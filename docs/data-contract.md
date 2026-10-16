@@ -1,7 +1,8 @@
 # Scraped records, dates, parsing, and deduplication
 
-Status: draft design, 2026-10-16. These are the data behaviors to establish in
-the spike. Database tables and implementation have not been created.
+Status: approved design being implemented, 2026-10-16. These are the data
+behaviors to verify in the bounded comparison. They do not claim successful
+model runs, database creation, or live SQL acceptance.
 
 The [problems document](problems.md) explains what needs solving. This document
 describes what scraped information means and how ingestion should handle it.
@@ -30,8 +31,10 @@ not establish how its contents were acquired.
 Source identifiers and timestamp meanings still need evidence. Use documented
 collector metadata where available and preserve uncertain native fields when
 their meaning is unresolved. The LLM must not turn an assumption about a field
-into an established identity or observation date. Source-specific rules are
-targeted remedies for demonstrated limitations, not prerequisites for intake.
+into an established identity or observation date. No handwritten semantic parser
+or source-specific onboarding is part of the initial comparison. An unfamiliar source must be accepted through the generic
+readers with explicit unresolved information where necessary. A demonstrated
+limitation may motivate a later reviewed design change.
 
 ## What comes in
 
@@ -62,8 +65,10 @@ establish structural variety.
 | Several responses describing one listing | Join description, bid/price, or manifest information only through established source keys and compatible observation context; retain every contributing payload and its own dates |
 
 These are the initial design cases, not an exhaustive list of supported sources.
-The first working delivery must exercise them through the same storage and
-agent query path. It does not require every combination of collector, format,
+The broader first working delivery must exercise them through the same storage
+and agent query path. The bounded comparison uses the frozen packages in the
+[plan](plan.md#frozen-evidence-packages); its constructed cases do not close the
+real-source evidence gaps. It does not require every combination of collector, format,
 hardware type, and price kind. Select source examples that expose several of
 those differences at once, and record the remaining coverage explicitly.
 
@@ -102,8 +107,8 @@ For a new or changed input shape, retain the capture and explicitly identify
 unmapped entries, uncertain associations, and failed interpretations. Do not
 silently drop entries or publish guessed fields as established facts. A failure
 in one entry must leave independently usable entries retrievable. First try a
-new source through the shared parser. Add source-specific code only for a
-demonstrated gap that general preparation or parsing cannot handle. Change
+new source through the shared parser. Record a demonstrated gap that general preparation or parsing cannot handle;
+do not introduce a source-specific semantic adapter into this comparison. Change
 shared semantics when inspected information shows a real new requirement.
 
 ### Existing material to inspect for these shapes
@@ -167,7 +172,7 @@ Ingestion should:
 The parser needs a provisional structured-output schema before the first model
 call. The target is extracted information from the supplied content, checked
 against varied real inputs. It is not the final database schema or a complete
-hardware taxonomy. The following is the proposed minimum shape; exact field
+hardware taxonomy. The following is the minimum semantic shape; exact field
 definitions and example records come from inspection of the initial captures.
 
 | Part of the output | Information to represent |
@@ -211,7 +216,7 @@ needed for persistence is retained from the start.
 
 ## Where LLM parsing fits
 
-The shared LLM-backed parser is the main proposed solution to varied source
+The shared LLM-backed parser is the main approved approach to varied source
 layouts and contextual interpretation. It receives captured content with source
 and collection context and returns records in a common, extensible structure.
 It must handle unfamiliar sources without depending on a handwritten parser
@@ -282,7 +287,7 @@ incompatible prior result is not a successful reusable parse. The
 freshness, and history. Reuse for unchanged content does not remove the work
 required to interpret genuinely new or meaningfully changed entries.
 
-This is the proposed execution model, not demonstrated functionality. We have
+This is the approved execution model being implemented, not demonstrated functionality. We have
 not yet established whether its output is sufficiently complete and correct,
 or whether it can process the intended ingestion volume in practice. The first
 parser experiment must examine those questions using varied real inputs.
@@ -322,9 +327,8 @@ distinctions below describe required behavior, not a prescribed table count.
 - **Scrape identity:** identify the collection and its record independently of
   the listing. Reimporting or retrying the same captured result is idempotent.
 - **Stored content:** reuse unchanged listing information and retain when it
-  was seen. Choose whether compact sightings or first/last-seen intervals meet
-  the required history; do not require another complete listing copy on each
-  check. Keep source evidence retrievable. A fingerprint used for content reuse
+  was seen. Retain distinct observations linked to reusable immutable interpretations;
+  do not require another complete listing copy on each check. Keep source evidence retrievable. A fingerprint used for content reuse
   must exclude changing collection metadata such as run IDs and scrape times;
   it must not discard meaningful item, price, location, or other source fields.
 - **Dates:** map each scraper's actual date fields to their established meanings.
@@ -374,10 +378,102 @@ interpretation the source output does not already provide directly.
 Choosing or changing a collector is proposed work. No scraper, paid collection,
 or production schedule has been created or changed for this spike.
 
-## Choices still to resolve
+## Persistence and publication contract
 
-- Which initial examples have established listing/variant keys and dates, and which remain explicitly unresolved; targeted fallbacks where required for reliable history or deduplication.
-- The meaning and precision of existing provider timestamps.
-- Which source fields participate in content comparison, and how normalization affects it.
-- Whether compact sightings or first/last-seen intervals preserve the history we need.
-- The actual stored records and parser output shape, checked against the selected source data.
+Raw captured bytes and their hashes must be committed durably before parsing.
+Evidence intake is independent of parser success: failures leave captures,
+provenance, supplied metadata, and explicit dispositions retrievable. A file
+hash establishes byte identity, not the source listing, collector event, or
+meaning of a timestamp. Record collection/record identity separately so a new
+unchanged scrape can be distinguished from reimporting the same scrape.
+
+Keep four meanings separate:
+
+| Concept | Meaning |
+|---|---|
+| Capture | Immutable source bytes and provenance, including selected native fragments and parent references |
+| Observation | A distinct collection event, with established retrieval time if known, source identity evidence, and links to captured content |
+| Interpretation result | Immutable typed items, prices, facts/attributes, and relations produced under a recorded parser/configuration version from allowed evidence |
+| Acceptance | Whether a result is accepted for a particular experiment and parser arm, with validation/disposition information |
+
+Items, prices, and relationships belong to their immutable interpretation result.
+Do not update shared mutable item rows so that a later interpretation changes
+what an earlier experiment or observation meant. Acceptance is scoped by both
+experiment and arm; one candidate's accepted output must not become the other's
+result or satisfy its coverage. A revised interpretation is another result over
+existing evidence, without a fabricated observation or fresh market date.
+
+Publish a dependency-closed result atomically: every price scope, item reference,
+relation endpoint, and evidence reference must resolve inside the accepted
+result or its explicitly allowed captured evidence. An invalid dependent
+fragment cannot leak into accepted SQL views. Independently valid results may
+publish when another unit fails; retain both the success and failed disposition.
+Do not accept the entire batch merely because some outputs validate, or discard
+all useful results because an unrelated unit fails.
+
+Prices use exact PostgreSQL numeric values, with currency, original text, kind,
+purchase quantity, and explicit scope. Scope may be an item, variant, system,
+lot, or unresolved source group; a price without supported scope is not a
+component offer. Facts and extensible attributes remain structured JSONB with
+evidence references and justified units/normalization. Common SQL views expose
+items, facts/attributes, prices, relations, provenance, observations/history,
+unknowns, conflicts, and acceptance without requiring consumers to reconstruct
+the ingestion conversation. This is an access requirement, not a promise of
+particular table/view names before integration.
+
+A trusted identity key can combine source, native listing, seller context, and
+variant where established. Collector/run identity does not split that listing.
+Unresolved native IDs or model guesses stay provisional; retain their facts
+without promoting them into authoritative cross-capture identity. Different
+sellers' offers remain distinct even for identical hardware.
+
+A content/context fingerprint for reuse excludes volatile collection metadata
+but retains semantically relevant evidence, native grouping, and parser/config
+version. Reuse is allowed only for compatible validated results. Failed,
+missing, incomplete, or incompatible results do not qualify. If generic
+normalization cannot establish semantic equivalence safely, use conservative
+byte/context identity rather than discard meaningful differences. An unchanged
+new scrape records a new sighting and may reuse the prior interpretation. An
+A–B–A sequence can reuse A's interpretation but retains all three observations
+and the chronological return to A.
+
+Choose current state by established observation time, never import or parse
+time. Late old imports remain history without replacing newer observations.
+Unknown-time evidence remains queryable separately and cannot become a current
+dated price by default. Equal observation times with incompatible results are
+an explicit conflict, not a last-write-wins choice. SQL consumers must be able
+to retrieve the competing states and their evidence. A missing field in a
+partial scrape does not imply deletion, unavailability, or a changed price.
+
+## Bounded comparison contract
+
+The two candidates share typed output, validation, allowed capture bytes, and
+accounting. The staged candidate conditionally discovers layout, extracts
+batches, validates, and allows one correction per stage. The scoped tool loop
+uses only `list_children`, `read_region`, and `search` over the same package
+allowlist before producing the typed result. Neither candidate can read the
+independent expected-answer oracle. SQL consumer agents are separate from these
+parser candidates.
+
+Apply every [shared package limit](plan.md#the-two-callable-candidates) across all
+stages, including correction and final-result generation. Report input units
+attempted, omitted, or stopped; paginated tool responses must explicitly expose
+continuation. No source or model-context truncation may hide missing entries.
+Record unique and repeated source exposure, model/tool attempts, tokens, times,
+errors, and unsupported output. The comparison report checks expected facts,
+omissions, wrong associations, unsupported values, dates, and SQL results
+separately; it does not collapse them into a score or confidence number.
+
+## Questions that evidence must resolve
+
+- Which selected native IDs, seller/variant contexts, and observation dates have established semantics, and which remain unresolved?
+- What does each provider timestamp mean? The eBay timestamp above remains provider-reported until independently verified.
+- Which complete selected fragments and context define safe content reuse, without losing meaningful changes?
+- Which expected facts and source associations actually survive both parser arms and SQL storage?
+- Which intended ingestion volume is supported by the measured requests, bytes, tokens, and elapsed time? The bounded run alone does not establish collector-scale capacity.
+
+Real multi-item post and split-auction captures, verified retrieval-date
+semantics, and a proven non-Bright-Data route remain evidence gaps. Authored
+Atom/auction cases and derived CSV rows cannot close them. These unknowns do
+not prevent preserving inputs and partial interpretations, but they limit any
+claim that the broader first delivery works.
