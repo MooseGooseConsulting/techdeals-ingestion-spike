@@ -82,16 +82,19 @@ def main() -> int:
     if sum(len(s.content) for s in sources) > args.max_input_bytes:
         parser.error("Selected inputs exceed max-input-bytes; choose a smaller package")
 
-    payloads = [{
-        "input_id": s.input_id,
-        "namespace": s.namespace,
-        "acquisition_key": s.acquisition_key,
-        "linked_group": s.linked_group,
-        "media_type": s.media_type,
-        "retrieved_at": s.retrieved_at.isoformat() if s.retrieved_at else None,
-        "url": s.url,
-        "text": s.content.decode("utf-8-sig"),
-    } for s in sources]
+    payloads = [
+        {
+            "input_id": s.input_id,
+            "namespace": s.namespace,
+            "acquisition_key": s.acquisition_key,
+            "linked_group": s.linked_group,
+            "media_type": s.media_type,
+            "retrieved_at": s.retrieved_at.isoformat() if s.retrieved_at else None,
+            "url": s.url,
+            "text": s.content.decode("utf-8-sig"),
+        }
+        for s in sources
+    ]
 
     # DSPy uses LiteLLM's OpenAI-compatible provider adapter here; no local model.
     lm = dspy.LM(
@@ -105,6 +108,7 @@ def main() -> int:
 
     class Extract(dspy.Signature):
         """Interpret previously unseen source structures without source-specific parsers."""
+
         sources: list[dict] = dspy.InputField()
         task: str = dspy.InputField()
         extraction: dict = dspy.OutputField()
@@ -134,9 +138,7 @@ def main() -> int:
             "model": args.model,
             "package": args.package,
             "input_ids": args.ids,
-            "source_hashes": {
-                s.input_id: hashlib.sha256(s.content).hexdigest() for s in sources
-            },
+            "source_hashes": {s.input_id: hashlib.sha256(s.content).hexdigest() for s in sources},
             "max_iters": args.max_iters,
             "max_llm_calls": args.max_llm_calls,
             "max_input_bytes": args.max_input_bytes,
