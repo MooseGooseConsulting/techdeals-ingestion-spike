@@ -355,11 +355,17 @@ def test_equal_time_conflicts_and_selected_reuse(store, tmp_path):
 
     p, unit = publish("1")
     publish("2")
+    assert len(store.query("listing_sightings", experiment_id=token)) == 2
+    assert len(store.query("current_listings", experiment_id=token)) == 1
+    assert len(store.query("current_prices", experiment_id=token)) == 1
     assert all(
         not row["equal_time_conflict"]
         for row in store.query("current_listings", experiment_id=token)
     )
     publish("3", amount="20")
+    assert len(store.query("current_listings", experiment_id=token)) == 2
+    assert len(store.query("current_prices", experiment_id=token)) == 2
+    assert len(store.query("listing_sightings", experiment_id=token)) == 3
     assert all(
         row["equal_time_conflict"] for row in store.query("current_listings", experiment_id=token)
     )
@@ -451,3 +457,81 @@ def test_source_date_only_changes_and_equal_time_conflicts(store, tmp_path):
     current = store.query("current_listings", experiment_id=token, arm="dates")
     assert len(current) == 2 and all(row["equal_time_conflict"] for row in current)
     assert len(store.query("listing_changes", experiment_id=token, arm="dates")) == 1
+
+
+def test_partial_rerun_and_newer_partial_preserve_complete_state(store, tmp_path):
+    token = uuid4().hex
+    path = tmp_path / "raw"
+    path.write_text("Server $100")
+    capture = CaptureInput(
+        capture_id=token,
+        acquisition_key=token,
+        path=path,
+        media_type="text/plain",
+        source_namespace="test",
+        retrieved_at=datetime(2026, 1, 2, tzinfo=UTC),
+        metadata={"identity_bindings": {"$": {"confirmed": True, "native_id": token}}},
+    )
+
+    def publish(capture, suffix, status):
+        ref = EvidenceRef(capture_id=capture.capture_id, locator="$")
+        offer = Offer(local_id="offer", title="Server", evidence=[ref])
+        if status == "complete":
+            offer.prices = [
+                Price(
+                    local_id="price",
+                    amount=Decimal(100),
+                    kind="ask",
+                    scope_refs=["offer"],
+                    evidence=[ref],
+                )
+            ]
+        package = WorkPackage(package_id=token + suffix, captures=[capture])
+        return store.publish(
+            package,
+            ParseBatchResult(
+                batch_id=token + suffix,
+                units=[
+                    UnitResult(
+                        unit_id=capture.capture_id,
+                        input_refs=[ref],
+                        status=status,
+                        offers=[offer],
+                    )
+                ],
+            ),
+            EvidenceIndex([capture]),
+            token,
+            "a",
+            token + suffix,
+            parser_fingerprint=suffix,
+        )
+
+    publish(capture, "complete", "complete")
+    original = store.query("current_listings", experiment_id=token)[0]
+    publish(capture, "rerun", "partial")
+    assert store.query("current_listings", experiment_id=token)[0] == original
+    with store.connect() as conn:
+        rows = conn.execute(
+            "SELECT payload->>'status' AS status FROM interpretations WHERE experiment_id=%s",
+            (token,),
+        ).fetchall()
+    assert sorted(row["status"] for row in rows) == ["complete", "partial"]
+    newer = capture.model_copy(
+        update={
+            "capture_id": token + "new",
+            "acquisition_key": token + "new",
+            "retrieved_at": datetime(2026, 1, 3, tzinfo=UTC),
+        }
+    )
+    publish(newer, "newpartial", "partial")
+    sightings = store.query("listing_sightings", experiment_id=token)
+    assert len(sightings) == 2
+    assert any(row["unit_payload"]["status"] == "partial" for row in sightings)
+    assert store.query("current_listings", experiment_id=token)[0] == original
+    price = store.query("current_prices", experiment_id=token)[0]
+    assert price["amount"] == Decimal(100)
+    assert price["observed_at"] == datetime(2026, 1, 2, tzinfo=UTC)
+    assert len(store.query("listing_changes", experiment_id=token)) == 1
+    store.migrate()  # Existing views and their dependents must update repeatably.
+    assert store.query("current_listings", experiment_id=token)[0] == original

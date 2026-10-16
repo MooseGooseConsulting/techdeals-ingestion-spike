@@ -62,14 +62,23 @@ CREATE OR REPLACE VIEW listing_sightings AS
  JOIN accepted a ON a.result_id=i.result_id JOIN observations ob ON ob.observation_id=i.observation_id;
 CREATE OR REPLACE VIEW unresolved_entries AS SELECT * FROM listing_sightings WHERE listing_id IS NULL;
 CREATE OR REPLACE VIEW undated_evidence AS SELECT * FROM listing_sightings WHERE observed_at IS NULL;
+-- Partial sightings retain their own evidence and dates. Only complete states can
+-- replace current state; no fields or freshness dates are merged across observations.
 CREATE OR REPLACE VIEW current_listings AS
- WITH ranked AS (SELECT s.*, dense_rank() OVER (
+ WITH complete AS (
+ SELECT * FROM listing_sightings WHERE listing_id IS NOT NULL AND observed_at IS NOT NULL
+ AND unit_payload->>'status'='complete'),
+ ranked AS (SELECT s.*, dense_rank() OVER (
  PARTITION BY listing_id,experiment_id,arm ORDER BY observed_at DESC) AS time_rank
- FROM listing_sightings s WHERE listing_id IS NOT NULL AND observed_at IS NOT NULL)
- SELECT r.*, (SELECT count(DISTINCT s.semantic_payload)>1 FROM listing_sightings s
+ FROM complete s),
+ representatives AS (
+ SELECT DISTINCT ON (listing_id,experiment_id,arm,semantic_payload) * FROM ranked
+ WHERE time_rank=1
+ ORDER BY listing_id,experiment_id,arm,semantic_payload,result_id,local_id)
+ SELECT r.*, (SELECT count(DISTINCT s.semantic_payload)>1 FROM complete s
  WHERE s.listing_id=r.listing_id AND s.experiment_id=r.experiment_id AND s.arm=r.arm
  AND s.observed_at=r.observed_at) AS equal_time_conflict
- FROM ranked r WHERE time_rank=1;
+ FROM representatives r;
 CREATE OR REPLACE VIEW current_items AS
  SELECT i.*, c.listing_id,c.observation_id,c.experiment_id,c.arm,c.observed_at,c.equal_time_conflict
  FROM items i JOIN current_listings c ON c.result_id=i.result_id AND c.local_id=i.offer_id;
@@ -81,10 +90,12 @@ CREATE OR REPLACE VIEW listing_changes AS
  SELECT listing_id,experiment_id,arm,observed_at,count(DISTINCT semantic_payload)>1 AS conflict,
         (jsonb_agg(DISTINCT semantic_payload)->0) AS meaning
  FROM listing_sightings WHERE listing_id IS NOT NULL AND observed_at IS NOT NULL
+ AND unit_payload->>'status'='complete'
  GROUP BY listing_id,experiment_id,arm,observed_at),
  ordered AS (SELECT *,lag(meaning) OVER
  (PARTITION BY listing_id,experiment_id,arm ORDER BY observed_at) AS previous_payload
  FROM grouped WHERE NOT conflict)
  SELECT s.*,o.previous_payload FROM ordered o JOIN listing_sightings s
  USING(listing_id,experiment_id,arm,observed_at)
- WHERE o.previous_payload IS NULL OR o.previous_payload IS DISTINCT FROM o.meaning;
+ WHERE s.unit_payload->>'status'='complete'
+ AND (o.previous_payload IS NULL OR o.previous_payload IS DISTINCT FROM o.meaning);

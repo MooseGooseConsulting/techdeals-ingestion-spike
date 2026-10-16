@@ -52,7 +52,7 @@ def semantic_key(package, unit, parser_fingerprint):
                 metadata,
             ]
         )
-    return digest(["contract-v1", parser_fingerprint, parts])
+    return digest(["contract-v2", parser_fingerprint, parts])
 
 
 def _rebind(value, mapping):
@@ -279,12 +279,7 @@ class Store:
                                     offer.local_id,
                                     listing,
                                     offer.title,
-                                    Jsonb(
-                                        {
-                                            k: v.model_dump(mode="json")
-                                            for k, v in offer.fields.items()
-                                        }
-                                    ),
+                                    Jsonb(offer.fields.model_dump(mode="json")),
                                     Jsonb(offer.model_dump(mode="json")),
                                     Jsonb(_meaning(offer.model_dump(mode="json"))),
                                 ),
@@ -333,10 +328,16 @@ class Store:
                                         Jsonb(relation.model_dump(mode="json")),
                                     ),
                                 )
+                        # Retain every interpretation, but a partial rerun cannot erase
+                        # a complete selection for the same collection event.
                         conn.execute(
                             """INSERT INTO accepted VALUES (%s,%s,%s,%s)
-                            ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id""",
-                            (observation, experiment_id, arm, rid),
+                            ON CONFLICT (observation_id,experiment_id,arm) DO UPDATE SET result_id=EXCLUDED.result_id
+                            WHERE %s = 'complete' OR NOT EXISTS (
+                                SELECT 1 FROM interpretations selected
+                                WHERE selected.result_id=accepted.result_id
+                                AND selected.payload->>'status'='complete')""",
+                            (observation, experiment_id, arm, rid, unit.status),
                         )
                         report["published_units"] += 1
                 except (psycopg.Error, ValueError) as exc:
