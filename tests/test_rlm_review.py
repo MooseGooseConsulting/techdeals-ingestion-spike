@@ -11,31 +11,38 @@ class FakeLM:
         self.history = history
 
     def inspect_history(self, n, file):
-        file.write(f"Model calls: {n}\n")
+        file.write(f"Model calls: {n}\\n")
         for call in self.history[-n:]:
-            file.write(str(call) + "\n")
+            file.write(str(call) + "\\n")
 
 
 def test_complete_run_saves_reviewable_prompts_and_code(tmp_path):
     secret = "supersecret"
-    lm = FakeLM([
-        {
-            "messages": [{"role": "user", "content": "Read 6 products"}],
-             "response": {"message": "try Python"},
-             "authorization": f"Bearer {secret}"},
-        {"messages": [{"role": "user", "content": f"Do not echo {secret}"}],
-         "response": "6 products"},
-    ])
+    lm = FakeLM(
+        [
+            {
+                "messages": [{"role": "user", "content": "Read 6 products"}],
+                "response": {"message": "try Python"},
+                "authorization": f"Bearer {secret}",
+            },
+            {
+                "messages": [{"role": "user", "content": f"Do not echo {secret}"}],
+                "response": "6 products",
+            },
+        ]
+    )
     prediction = SimpleNamespace(
         extraction={"entries": [], "issues": []},
         final_reasoning="SUBMIT invoked",
-        trajectory=[{"reasoning": "Inspect", "code": "print(len(products))",
-                     "output": "6"}],
+        trajectory=[{"reasoning": "Inspect", "code": "print(len(products))", "output": "6"}],
     )
     output = tmp_path / "run1"
     summary = record_rlm_run(
-        lambda: prediction, lm, output,
-        metadata={"case": "spd"}, secrets=(secret,),
+        lambda: prediction,
+        lm,
+        output,
+        metadata={"case": "spd"},
+        secrets=(secret,),
         validate=lambda result: assert_valid(result),
     )
     assert summary["status"] == "completed"
@@ -53,8 +60,10 @@ def assert_valid(result):
 
 def test_failed_run_retains_prompts_and_local_review(tmp_path):
     lm = FakeLM([{"messages": [{"role": "user", "content": "bad request"}]}])
+
     def crash():
         raise RuntimeError("Provider error")
+
     directory = tmp_path / "failed"
     summary = record_rlm_run(crash, lm, directory, metadata={"case": "ebay"})
     assert summary["status"] == "failed"
@@ -65,8 +74,11 @@ def test_failed_run_retains_prompts_and_local_review(tmp_path):
 
 def test_fallback_is_not_accepted_and_review_is_rerenderable(tmp_path):
     lm = FakeLM([])
-    prediction = SimpleNamespace(extraction={"entries": [], "issues": []},
-        final_reasoning="Extract forced final output", trajectory=[])
+    prediction = SimpleNamespace(
+        extraction={"entries": [], "issues": []},
+        final_reasoning="Extract forced final output",
+        trajectory=[],
+    )
     directory = tmp_path / "fallback"
     summary = record_rlm_run(lambda: prediction, lm, directory, metadata={})
     assert summary["status"] == "partial"
@@ -76,10 +88,15 @@ def test_fallback_is_not_accepted_and_review_is_rerenderable(tmp_path):
 
 def test_failed_validation_still_saves_result_and_trajectory(tmp_path):
     lm = FakeLM([])
-    prediction = SimpleNamespace(extraction={"entries": []},
-        final_reasoning="done", trajectory=[{"code": "x=1", "output": ""}])
+    prediction = SimpleNamespace(
+        extraction={"entries": []},
+        final_reasoning="done",
+        trajectory=[{"code": "x=1", "output": ""}],
+    )
+
     def reject(_):
         raise ValueError("No issues field")
+
     directory = tmp_path / "invalid"
     summary = record_rlm_run(lambda: prediction, lm, directory, metadata={}, validate=reject)
     assert summary["status"] == "failed"
