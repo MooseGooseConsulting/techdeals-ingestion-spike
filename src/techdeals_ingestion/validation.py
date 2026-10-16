@@ -90,9 +90,7 @@ def validate_result(
             for key, fact in offer.fields.items():
                 require_fact_evidence(fact, offer_path + "/fields/" + key)
             if offer.identity_claim is not None:
-                require_fact_evidence(
-                    offer.identity_claim, offer_path + "/identity_claim"
-                )
+                require_fact_evidence(offer.identity_claim, offer_path + "/identity_claim")
             for item in offer.items:
                 if (item.title or item.quantity is not None) and not item.evidence:
                     issue(
@@ -101,9 +99,7 @@ def validate_result(
                         "item title/quantity requires evidence",
                     )
                 for key, fact in item.attributes.items():
-                    require_fact_evidence(
-                        fact, offer_path + "/items/" + item.local_id + "/" + key
-                    )
+                    require_fact_evidence(fact, offer_path + "/items/" + item.local_id + "/" + key)
             for price in offer.prices:
                 if price.amount is not None:
                     if not price.evidence:
@@ -111,9 +107,7 @@ def validate_result(
                     if not price.scope_refs:
                         issue("missing_price_scope", offer_path, price.local_id)
                 for condition in price.conditions:
-                    require_fact_evidence(
-                        condition, offer_path + "/prices/" + price.local_id
-                    )
+                    require_fact_evidence(condition, offer_path + "/prices/" + price.local_id)
                 for ref in price.scope_refs:
                     if ref not in scope_ids:
                         issue("invalid_price_scope", path, ref)
@@ -131,7 +125,5 @@ def require_valid_result(
 ) -> ParseBatchResult:
     issues = validate_result(result, units, index)
     if issues:
-        raise ValueError(
-            "; ".join(f"{i.code} at {i.path}: {i.message}" for i in issues)
-        )
+        raise ValueError("; ".join(f"{i.code} at {i.path}: {i.message}" for i in issues))
     return result

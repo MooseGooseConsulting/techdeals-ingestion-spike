@@ -179,6 +179,17 @@ async def parse_batch(package: WorkPackage, index: EvidenceIndex, session: Any) 
     accepted = {}
     errors = []
     for attempt in range(2):
+        if attempt:
+            runs = getattr(session, "runs", [])
+            if runs and runs[-1].get("model_retry_prompts", 0):
+                break
+            agent = session.build_agent(
+                output_type=ParseBatchResult,
+                instructions=INSTRUCTIONS,
+                tools=[list_children, read_region, search_capture],
+                deps_type=Reader,
+                retry_budget=0,
+            )
         try:
             response = await session.run(agent, prompt, deps=reader)
             result = response.output

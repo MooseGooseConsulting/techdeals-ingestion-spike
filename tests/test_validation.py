@@ -24,9 +24,7 @@ def setup(tmp_path):
                 media_type="application/json",
             )
         )
-    return prepare_units(WorkPackage(package_id="p", captures=captures)), EvidenceIndex(
-        captures
-    )
+    return prepare_units(WorkPackage(package_id="p", captures=captures)), EvidenceIndex(captures)
 
 
 def unit(cid):
@@ -62,9 +60,7 @@ def test_scope_and_resolution(tmp_path):
                 }
             },
             "prices": [{"local_id": "p", "kind": "ask", "scope_refs": ["missing"]}],
-            "relations": [
-                {"subject_ref": "o", "predicate": "contains", "object_ref": "missing"}
-            ],
+            "relations": [{"subject_ref": "o", "predicate": "contains", "object_ref": "missing"}],
         }
     ]
     result = ParseBatchResult(batch_id="x", units=[a, unit("b")])
@@ -76,9 +72,7 @@ def test_scope_and_resolution(tmp_path):
     a["input_refs"][0]["locator"] = "json:/missing"
     assert "unresolved_evidence" in {
         i.code
-        for i in validate_result(
-            ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index
-        )
+        for i in validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
     }
 
 
@@ -99,9 +93,7 @@ def test_unsupported_facts_titles_and_prices_rejected(tmp_path):
             "prices": [{"local_id": "p", "kind": "ask", "amount": "12"}],
         }
     ]
-    issues = validate_result(
-        ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index
-    )
+    issues = validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
     assert {i.code for i in issues} == {
         "missing_offer_evidence",
         "missing_fact_evidence",
@@ -115,9 +107,7 @@ def test_unsupported_facts_titles_and_prices_rejected(tmp_path):
     offer["fields"]["capacity"]["evidence"] = [ref]
     offer["items"][0]["evidence"] = [ref]
     offer["prices"][0].update(evidence=[ref], scope_refs=["i"])
-    assert not validate_result(
-        ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index
-    )
+    assert not validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
 
 
 def test_price_cannot_cover_unrelated_offer_in_same_unit(tmp_path):
@@ -140,7 +130,5 @@ def test_price_cannot_cover_unrelated_offer_in_same_unit(tmp_path):
     ]
     assert {
         i.code
-        for i in validate_result(
-            ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index
-        )
+        for i in validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
     } == {"invalid_price_scope"}

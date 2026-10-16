@@ -6,15 +6,18 @@ import hashlib
 import json
 import os
 import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
+
+from httpx2 import HTTPError
+from openai import APIError
+from psycopg import Error as DatabaseError
 
 from .contracts import ParseBatchResult, UnitResult, prepare_units
 from .evidence import EvidenceIndex, load_work_packages
 from .probe import probe
 from .provider import LLMRun
 from .settings import ParserSettings
-from .storage import Store, VIEWS
+from .storage import VIEWS, Store
 
 
 def _json(value):
@@ -31,15 +34,26 @@ def _store(direct=False):
 
 def parser_fingerprint(settings, arm):
     folder = Path(__file__).parent
-    names = ["contracts.py", "evidence.py", "validation.py", "provider.py", "settings.py",
-             "staged.py" if arm == "staged" else "tool_parser.py"]
-    return hashlib.sha256(settings.config_id.encode() + b"".join(
-        (folder / name).read_bytes() for name in names
-    )).hexdigest()
+    names = [
+        "contracts.py",
+        "evidence.py",
+        "validation.py",
+        "provider.py",
+        "settings.py",
+        "instructions.py",
+        "staged.py" if arm == "staged" else "tool_parser.py",
+    ]
+    return hashlib.sha256(
+        settings.config_id.encode()
+        + Path("uv.lock").read_bytes()
+        + b"".join((folder / name).read_bytes() for name in names)
+    ).hexdigest()
 
 
 def _revision():
-    value = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    value = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=False, capture_output=True, text=True
+    )
     return value.stdout.strip() if value.returncode == 0 else None
 
 
@@ -57,17 +71,25 @@ async def run_package(args):
     # Retention precedes EvidenceIndex: invalid native syntax must not lose its bytes.
     store.retain_package(package)
     fingerprint = parser_fingerprint(settings, args.arm)
-    report = {"experiment": args.experiment, "arm": args.arm, "package": args.package,
-              "source_revision": _revision(), "parser_fingerprint": fingerprint,
-              "config": settings.model_dump(), "reused": False}
+    report = {
+        "experiment": args.experiment,
+        "arm": args.arm,
+        "package": args.package,
+        "source_revision": _revision(),
+        "parser_fingerprint": fingerprint,
+        "config": settings.model_dump(),
+        "reused": False,
+    }
     try:
         index = EvidenceIndex(package.captures)
         source_bytes = sum(len(b) for b in index.originals.values())
         report["source_bytes"] = source_bytes
         if source_bytes > settings.max_package_bytes:
             raise ValueError("Package exceeds configured source allowance")
-        result = None if args.fresh else store.reuse(
-            package, index, args.experiment, args.arm, fingerprint
+        result = (
+            None
+            if args.fresh
+            else store.reuse(package, index, args.experiment, args.arm, fingerprint)
         )
         if result is not None:
             result.batch_id = package.package_id
@@ -83,36 +105,80 @@ async def run_package(args):
                     result = await parse_batch(package, index, session)
                 finally:
                     report["stats"] = session.stats()
+                    report["coverage"] = getattr(session, "coverage", {})
         attempt = args.attempt or f"{args.experiment}:{args.arm}:{args.package}:{destination.name}"
         report["publication"] = store.publish(
-            package, result, index, args.experiment, args.arm, attempt,
+            package,
+            result,
+            index,
+            args.experiment,
+            args.arm,
+            attempt,
             parser_fingerprint=fingerprint,
         )
-        report["units"] = [{"unit_id": u.unit_id, "status": u.status,
-                             "offers": len(u.offers), "issues": u.issues} for u in result.units]
+        report["units"] = [
+            {"unit_id": u.unit_id, "status": u.status, "offers": len(u.offers), "issues": u.issues}
+            for u in result.units
+        ]
         (destination / "result.json").write_text(result.model_dump_json(indent=2) + "\n")
-        rows = store.query("listing_sightings", experiment_id=args.experiment, arm=args.arm)
+        unit_ids = {u.unit_id for u in result.units}
+        rows = [
+            r
+            for r in store.query("listing_sightings", experiment_id=args.experiment, arm=args.arm)
+            if r["unit_id"] in unit_ids
+        ]
         (destination / "database-rows.json").write_text(_json(rows))
+        with store.connect() as connection:
+            price_rows = connection.execute(
+                "SELECT * FROM prices WHERE result_id=ANY(%s)",
+                ([r["result_id"] for r in rows],),
+            ).fetchall()
+        (destination / "database-prices.json").write_text(_json(price_rows))
+        current = store.query("current_listings", experiment_id=args.experiment, arm=args.arm)
+        (destination / "database-current.json").write_text(_json(current))
         report["database_rows"] = len(rows)
-        report["status"] = "completed_with_failures" if any(
-            u.status == "failed" for u in result.units
-        ) or report["publication"]["errors"] else "completed"
-    except Exception as exc:
+        report["status"] = (
+            "completed_with_failures"
+            if any(u.status == "failed" for u in result.units) or report["publication"]["errors"]
+            else "completed"
+        )
+    except (ValueError, KeyError, OSError, RuntimeError, APIError, HTTPError, DatabaseError) as exc:
         report["status"] = "failed"
         report["exception_type"] = type(exc).__name__
         # Preparation failures still have an immutable failed attempt alongside retained evidence.
         if "index" in locals():
-            failed = ParseBatchResult(batch_id=package.package_id, units=[
-                UnitResult(unit_id=u.unit_id, input_refs=u.input_refs, status="failed",
-                           issues=[f"Package stopped: {type(exc).__name__}"])
-                for u in prepare_units(package)
-            ])
+            failed = ParseBatchResult(
+                batch_id=package.package_id,
+                units=[
+                    UnitResult(
+                        unit_id=u.unit_id,
+                        input_refs=u.input_refs,
+                        status="failed",
+                        issues=[f"Package stopped: {type(exc).__name__}"],
+                    )
+                    for u in prepare_units(package)
+                ],
+            )
             report["publication"] = store.publish(
-                package, failed, index, args.experiment, args.arm,
-                args.attempt or f"{args.experiment}:{args.arm}:{args.package}:{destination.name}:failed",
+                package,
+                failed,
+                index,
+                args.experiment,
+                args.arm,
+                args.attempt
+                or f"{args.experiment}:{args.arm}:{args.package}:{destination.name}:failed",
                 parser_fingerprint=fingerprint,
             )
             (destination / "result.json").write_text(failed.model_dump_json(indent=2) + "\n")
+        else:
+            report["publication"] = store.record_failure(
+                package,
+                args.experiment,
+                args.arm,
+                args.attempt
+                or f"{args.experiment}:{args.arm}:{args.package}:{destination.name}:failed",
+                f"Preparation failed: {type(exc).__name__}",
+            )
     (destination / "summary.json").write_text(_json(report))
     print(_json(report), end="")
     return 1 if report["status"] in ("failed", "completed_with_failures") else 0
@@ -136,7 +202,9 @@ def main():
     run.add_argument("--experiment", required=True)
     run.add_argument("--output", required=True)
     run.add_argument("--attempt")
-    run.add_argument("--fresh", action="store_true", help="Explicit new interpretation, bypass reuse")
+    run.add_argument(
+        "--fresh", action="store_true", help="Explicit new interpretation, bypass reuse"
+    )
     query = sub.add_parser("query", help="Read a documented SQL view")
     query.add_argument("view", choices=sorted(VIEWS))
     query.add_argument("--experiment")
@@ -145,11 +213,24 @@ def main():
     if args.command == "inspect":
         package = next(p for p in load_work_packages(args.manifest) if p.package_id == args.package)
         index = EvidenceIndex(package.captures)
-        print(_json({"package": package.package_id,
-                     "source_bytes": sum(map(len, index.originals.values())),
-                     "units": [u.model_dump() for u in prepare_units(package)],
-                     "captures": [{"id": c.capture_id, "bytes": len(index.originals[c.capture_id]),
-                                   "retrieved_at": c.retrieved_at} for c in package.captures]}), end="")
+        print(
+            _json(
+                {
+                    "package": package.package_id,
+                    "source_bytes": sum(map(len, index.originals.values())),
+                    "units": [u.model_dump() for u in prepare_units(package)],
+                    "captures": [
+                        {
+                            "id": c.capture_id,
+                            "bytes": len(index.originals[c.capture_id]),
+                            "retrieved_at": c.retrieved_at,
+                        }
+                        for c in package.captures
+                    ],
+                }
+            ),
+            end="",
+        )
     elif args.command == "probe":
         result = asyncio.run(probe(args.config, args.output))
         print(_json(result), end="")

@@ -2,10 +2,12 @@
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from httpx2 import HTTPError
+from openai import APIError
 from pydantic import BaseModel, ConfigDict
 
 from .provider import LLMRun
@@ -26,7 +28,7 @@ class ProbeResult(BaseModel):
 
 async def probe(config="config/parser.toml", output=None, arms=("staged", "tool-reading")):
     settings = ParserSettings.load(config)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     folder = Path(output or f".runs/capability-{stamp}")
     if folder.exists():
         raise ValueError("Choose a new output directory to preserve the previous trial")
@@ -36,6 +38,7 @@ async def probe(config="config/parser.toml", output=None, arms=("staged", "tool-
     expected = [(str(p["id"]), p["title"], Decimal(p["variants"][0]["price"])) for p in products]
     outcomes = {}
     for arm in arms:
+
         async def read_inputs(capture_id: str) -> str:
             """Read the native product records. The allowed capture_id is products."""
             if capture_id != "products":
@@ -44,28 +47,39 @@ async def probe(config="config/parser.toml", output=None, arms=("staged", "tool-
 
         async with LLMRun(settings, folder / arm) as session:
             try:
-                instructions = "Return exactly both native product IDs, titles and first variant prices."
+                instructions = (
+                    "Return exactly both native product IDs, titles and first variant prices."
+                )
                 if arm == "tool-reading":
-                    instructions += ' First call read_inputs with capture_id="products" to read the evidence.'
+                    instructions += (
+                        ' First call read_inputs with capture_id="products" to read the evidence.'
+                    )
                 agent = session.build_agent(
                     ProbeResult, instructions, tools=[read_inputs] if arm == "tool-reading" else []
                 )
                 response = await session.run(
-                    agent, "Read products and return both items." if arm == "tool-reading" else material
+                    agent,
+                    "Read products and return both items." if arm == "tool-reading" else material,
                 )
                 actual = [(i.native_id, i.title, i.price) for i in response.output.items]
                 tool_read = any(
                     p.get("tool_name") == "read_inputs" and p.get("part_kind") == "tool-return"
-                    for run in session.runs for m in run["messages"] for p in m.get("parts", [])
+                    for run in session.runs
+                    for m in run["messages"]
+                    for p in m.get("parts", [])
                 )
                 outcomes[arm] = {
                     "passed": sorted(actual) == sorted(expected) and (arm == "staged" or tool_read),
                     "output": response.output.model_dump(mode="json"),
-                    "read_tool_called": tool_read, "stats": session.stats(),
+                    "read_tool_called": tool_read,
+                    "stats": session.stats(),
                 }
-            except Exception as exc:
-                outcomes[arm] = {"passed": False, "exception_type": type(exc).__name__,
-                                 "stats": session.stats()}
+            except (ValueError, OSError, RuntimeError, APIError, HTTPError) as exc:
+                outcomes[arm] = {
+                    "passed": False,
+                    "exception_type": type(exc).__name__,
+                    "stats": session.stats(),
+                }
         (folder / "result.json").write_text(json.dumps(outcomes, indent=2, default=str) + "\n")
     return outcomes
 

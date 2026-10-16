@@ -39,9 +39,7 @@ class Fact(Contract):
     name: str
     value: JsonValue = None
     unit: str | None = None
-    status: Literal["stated", "derived", "unknown", "ambiguous", "conflicting"] = (
-        "stated"
-    )
+    status: Literal["stated", "derived", "unknown", "ambiguous", "conflicting"] = "stated"
     original: str | None = None
     evidence: list[EvidenceRef] = Field(default_factory=list)
 
@@ -49,9 +47,7 @@ class Fact(Contract):
 class Item(Contract):
     local_id: str
     title: str | None = None
-    role: Literal[
-        "offered", "included", "optional", "compatible", "mentioned", "absent"
-    ]
+    role: Literal["offered", "included", "optional", "compatible", "mentioned", "absent"]
     quantity: Decimal | None = None
     attributes: dict[str, Fact] = Field(default_factory=dict)
     evidence: list[EvidenceRef] = Field(default_factory=list)
@@ -118,7 +114,5 @@ def prepare_units(package: WorkPackage) -> list[PreparedUnit]:
     groups: dict[str, list[EvidenceRef]] = {}
     for capture in package.captures:
         key = capture.linked_group or capture.capture_id
-        groups.setdefault(key, []).append(
-            EvidenceRef(capture_id=capture.capture_id, locator="$")
-        )
+        groups.setdefault(key, []).append(EvidenceRef(capture_id=capture.capture_id, locator="$"))
     return [PreparedUnit(unit_id=key, input_refs=refs) for key, refs in groups.items()]

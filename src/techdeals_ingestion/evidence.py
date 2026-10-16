@@ -92,11 +92,7 @@ class EvidenceIndex:
                     locator = "json:" + pointer
                     add(locator, json.dumps(value, ensure_ascii=False), parent)
                     if isinstance(value, (dict, list)):
-                        entries = (
-                            value.items()
-                            if isinstance(value, dict)
-                            else enumerate(value)
-                        )
+                        entries = value.items() if isinstance(value, dict) else enumerate(value)
                         for key, child in entries:
                             escaped = str(key).replace("~", "~0").replace("/", "~1")
                             walk(child, pointer + "/" + escaped, locator)
@@ -118,12 +114,7 @@ class EvidenceIndex:
                             counts[child.name] = counts.get(child.name, 0) + 1
                             html_walk(
                                 child,
-                                locator
-                                + "/"
-                                + child.name
-                                + "["
-                                + str(counts[child.name])
-                                + "]",
+                                locator + "/" + child.name + "[" + str(counts[child.name]) + "]",
                                 primary,
                             )
 
@@ -144,12 +135,7 @@ class EvidenceIndex:
                         counts[child.tag] = counts.get(child.tag, 0) + 1
                         xml_walk(
                             child,
-                            locator
-                            + "/"
-                            + child.tag
-                            + "["
-                            + str(counts[child.tag])
-                            + "]",
+                            locator + "/" + child.tag + "[" + str(counts[child.tag]) + "]",
                             locator,
                         )
 
@@ -159,9 +145,7 @@ class EvidenceIndex:
                 for number, row in enumerate(
                     csv.reader(
                         io.StringIO(text),
-                        delimiter="\t"
-                        if media.endswith("tab-separated-values")
-                        else ",",
+                        delimiter="\t" if media.endswith("tab-separated-values") else ",",
                     )
                 ):
                     add("csv:/rows/" + str(number), json.dumps(row, ensure_ascii=False))
@@ -171,9 +155,7 @@ class EvidenceIndex:
             self.aliases.get((ref.capture_id, ref.locator), ref.locator)
         ]
 
-    def read(
-        self, ref: EvidenceRef, offset: int = 0, limit: int = MAX_PAGE_BYTES
-    ) -> dict:
+    def read(self, ref: EvidenceRef, offset: int = 0, limit: int = MAX_PAGE_BYTES) -> dict:
         if offset < 0 or not 1 <= limit <= MAX_PAGE_BYTES:
             raise ValueError("invalid page bounds")
         raw = self.resolve(ref).encode("utf-8")
@@ -193,19 +175,14 @@ class EvidenceIndex:
             "total_bytes": len(raw),
         }
 
-    def list_children(
-        self, ref: EvidenceRef, offset: int = 0, limit: int = 100
-    ) -> dict:
+    def list_children(self, ref: EvidenceRef, offset: int = 0, limit: int = 100) -> dict:
         self.resolve(ref)
         if offset < 0 or not 1 <= limit <= 100:
             raise ValueError("invalid page bounds")
         locator = self.aliases.get((ref.capture_id, ref.locator), ref.locator)
         children = self.children.get((ref.capture_id, locator), [])
         return _ref_page(
-            [
-                EvidenceRef(capture_id=ref.capture_id, locator=x).model_dump()
-                for x in children
-            ],
+            [EvidenceRef(capture_id=ref.capture_id, locator=x).model_dump() for x in children],
             offset,
             limit,
         )

@@ -146,6 +146,7 @@ class LLMRun:
         instructions: str,
         tools: Any = (),
         deps_type: Any = object,
+        retry_budget: int | None = None,
     ) -> Agent:
         return Agent(
             self.model,
@@ -154,7 +155,7 @@ class LLMRun:
             tools=tools,
             deps_type=deps_type,
             capabilities=[_CountToolAttempts(self)],
-            retries=self.settings.correction_retries,
+            retries=self.settings.correction_retries if retry_budget is None else retry_budget,
             model_settings={"max_tokens": self.settings.max_output_tokens},
         )
 

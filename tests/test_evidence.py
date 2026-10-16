@@ -25,9 +25,7 @@ def test_native_views_and_originals(tmp_path):
     for cid, media, raw in payloads:
         p = tmp_path / cid
         p.write_bytes(raw)
-        captures.append(
-            CaptureInput(capture_id=cid, acquisition_key=cid, path=p, media_type=media)
-        )
+        captures.append(CaptureInput(capture_id=cid, acquisition_key=cid, path=p, media_type=media))
     index = EvidenceIndex(captures)
     assert index.originals == {cid: raw for cid, _, raw in payloads}
     assert index.resolve(EvidenceRef(capture_id="j", locator="json:/a~1b/~0x")) == "19"
@@ -35,19 +33,13 @@ def test_native_views_and_originals(tmp_path):
         EvidenceRef(capture_id="h", locator="html:/html[1]/body[1]/p[1]")
     )
     assert index.search("ld+json", ["h"])["total"] > 0
-    assert 'price="3"' in index.resolve(
-        EvidenceRef(capture_id="x", locator="xml:/feed[1]/item[1]")
-    )
-    assert json.loads(
-        index.resolve(EvidenceRef(capture_id="c", locator="csv:/rows/1"))
-    ) == ["a,b", "23"]
+    assert 'price="3"' in index.resolve(EvidenceRef(capture_id="x", locator="xml:/feed[1]/item[1]"))
+    assert json.loads(index.resolve(EvidenceRef(capture_id="c", locator="csv:/rows/1"))) == [
+        "a,b",
+        "23",
+    ]
     assert (
-        len(
-            index.list_children(EvidenceRef(capture_id="x", locator="xml:/feed[1]"))[
-                "refs"
-            ]
-        )
-        == 2
+        len(index.list_children(EvidenceRef(capture_id="x", locator="xml:/feed[1]"))["refs"]) == 2
     )
     with pytest.raises(KeyError):
         index.resolve(EvidenceRef(capture_id="j", locator="json:/missing"))
@@ -57,11 +49,7 @@ def test_utf8_pagination(tmp_path):
     p = tmp_path / "text"
     p.write_text("é" * 10000)
     index = EvidenceIndex(
-        [
-            CaptureInput(
-                capture_id="t", acquisition_key="t", path=p, media_type="text/plain"
-            )
-        ]
+        [CaptureInput(capture_id="t", acquisition_key="t", path=p, media_type="text/plain")]
     )
     ref = EvidenceRef(capture_id="t", locator="$")
     offset = 0
@@ -103,26 +91,18 @@ def test_html_aliases_are_short_and_traversable(tmp_path):
     p = tmp_path / "deep.html"
     p.write_text("<div>" * 50 + '<span hidden="yes">value</span>' + "</div>" * 50)
     index = EvidenceIndex(
-        [
-            CaptureInput(
-                capture_id="h", acquisition_key="h", path=p, media_type="text/html"
-            )
-        ]
+        [CaptureInput(capture_id="h", acquisition_key="h", path=p, media_type="text/html")]
     )
     refs = index.snapshot()[0]["refs"]
     assert all(len(ref["locator"]) < 12 for ref in refs)
     assert (
-        index.list_children(EvidenceRef(capture_id="h", locator="$"))["refs"][0][
-            "locator"
-        ]
+        index.list_children(EvidenceRef(capture_id="h", locator="$"))["refs"][0]["locator"]
         == "html:@1"
     )
     assert (
-        index.list_children(EvidenceRef(capture_id="h", locator="html:/div[1]"))[
-            "refs"
-        ][0]["locator"]
+        index.list_children(EvidenceRef(capture_id="h", locator="html:/div[1]"))["refs"][0][
+            "locator"
+        ]
         == "html:@2"
     )
-    assert 'hidden="yes"' in index.resolve(
-        EvidenceRef(capture_id="h", locator="html:@51")
-    )
+    assert 'hidden="yes"' in index.resolve(EvidenceRef(capture_id="h", locator="html:@51"))
