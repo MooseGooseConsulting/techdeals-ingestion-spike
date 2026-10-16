@@ -104,6 +104,7 @@ async def test_http_error_is_not_retried_and_is_traced(monkeypatch, tmp_path):
             await session.run(session.build_agent(Answer, "Extract."), "source")
     assert len(calls) == 1
     trace = json.loads((tmp_path / "run-001.json").read_text())
+    assert trace["run"]["http_status"] == 429
     assert trace["run"]["status"] == "failed"
     assert trace["run"]["messages"]
     assert "authorization" not in json.dumps(trace).lower()

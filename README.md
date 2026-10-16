@@ -42,11 +42,11 @@ The initial full development attempts failed before producing usable rows. The
 current first gate is deliberately smaller: **two complete native records,
 11,584 bytes total, sent together in one extraction request**, followed by field
 inspection and actual Neon reads. Discovery and tool loops are bypassed for this
-gate. Live SQL checks established the tested persistence behavior. The first
-Lightning call returned after about 599 seconds, but both records failed
-price-scope validation and zero accepted records were published. Useful extraction
-and a field-by-field source comparison remain unproven; the implementation is a
-work-in-progress snapshot.
+gate. The parser names the common extraction fields in its Pydantic schema and
+uses framework-managed output corrections in the same conversation. Live SQL
+checks established the tested persistence behavior. Model attempts have either
+failed price-scope validation or failed at the provider before output; zero useful
+records have passed source inspection. The implementation remains in progress.
 
 From a clean checkout, run `uv sync --locked`. Inspect evidence without credentials:
 
@@ -107,6 +107,8 @@ results remain accessible through `listing_sightings`, `undated_evidence`, and
 `unresolved_entries`. `current_listings`, `current_items`, and `current_prices`
 require established source identities and retrieval times. `listing_changes`
 keeps dated change episodes; `ingestion_failures` exposes failed/missing units.
+`ingestion_outcomes` exposes accepted unit dispositions, including `no_offer`
+results that correctly have no listing or price row.
 Every view carries experiment and candidate (`arm`) dimensions.
 
 For example, another agent can retrieve stored prices with their seller/location

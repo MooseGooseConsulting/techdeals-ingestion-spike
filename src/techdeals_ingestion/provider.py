@@ -12,7 +12,7 @@ import httpx2 as httpx
 from openai import AsyncOpenAI
 from pydantic_ai import Agent, ToolOutput, capture_run_messages
 from pydantic_ai.capabilities import AbstractCapability
-from pydantic_ai.exceptions import UsageLimitExceeded
+from pydantic_ai.exceptions import ModelHTTPError, UsageLimitExceeded
 from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     RetryPromptPart,
@@ -195,6 +195,8 @@ class LLMRun:
             # Exception text can contain provider bodies or credentials; retain only its type.
             record["status"] = "failed"
             record["exception_type"] = type(exc).__name__
+            if isinstance(exc, ModelHTTPError):
+                record["http_status"] = exc.status_code
             raise
         finally:
             record["messages"] = json.loads(

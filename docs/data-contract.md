@@ -452,13 +452,18 @@ dated price by default. Equal observation times with incompatible results are
 an explicit conflict, not a last-write-wins choice. SQL consumers must be able
 to retrieve the competing states and their evidence. A missing field in a
 partial scrape does not imply deletion, unavailability, or a changed price.
+The implemented current/change views select complete observations as whole states.
+A partial rerun cannot replace an accepted complete interpretation, and a newer
+partial sighting cannot advance the older complete state's freshness date. Its
+own date and extracted facts remain available separately. Equal-time identical
+states have one current representative while their source sightings remain.
 
 ## Bounded comparison contract
 
 The two candidates share typed output, validation, allowed capture bytes, and
 accounting. The staged candidate conditionally discovers layout, extracts
 batches, validates, and allows one correction per stage. The scoped tool loop
-uses only `list_children`, `read_region`, and `search` over the same package
+uses only `list_children`, `read_region`, `read_regions`, and `search_capture` over the same package
 allowlist before producing the typed result. Neither candidate can read the
 independent expected-answer oracle. SQL consumer agents are separate from these
 parser candidates.
@@ -467,10 +472,14 @@ Apply every [shared package limit](plan.md#the-two-callable-candidates) across a
 stages, including correction and final-result generation. Report input units
 attempted, omitted, or stopped; paginated tool responses must explicitly expose
 continuation. No source or model-context truncation may hide missing entries.
-Record unique and repeated source exposure, model/tool attempts, tokens, times,
+Record distinct and repeated prepared-view exposure, model/tool attempts, tokens, times,
 errors, and unsupported output. The comparison report checks expected facts,
 omissions, wrong associations, unsupported values, dates, and SQL results
 separately; it does not collapse them into a score or confidence number.
+View accounting conservatively charges overlapping indexed views separately; it
+does not claim exact original-source coverage or count SDK history retransmission.
+The [plan](plan.md#the-two-callable-candidates) defines the separate native-retention,
+prepared-input, view-exposure, request, and model-context limits.
 
 ## Questions that evidence must resolve
 

@@ -32,11 +32,12 @@ Only after this small path produces useful, inspected records should the larger
 A/B development packages or held-back comparison run. The existing experimental
 candidate implementations do not constitute proof of that broader behavior.
 
-The first direct Lightning run returned two record outputs after about 599 seconds.
-Both failed price-scope validation, and no accepted records were published. This
-gate remains incomplete. Before expanding, simplify the extraction around named,
-typed core fields and PydanticAI's output-validator correction flow; the current
-generic fact dictionaries and manual correction loops require revision.
+This gate remains incomplete. The executable now uses named, typed core fields
+and PydanticAI's output-validator correction flow in one conversation. Initial
+model output failed price-scope validation; a later call with the revised schema
+failed at the provider before output. No useful two-record SQL result has yet
+passed source inspection. Keep model availability and semantic acceptance as
+separate checks, and do not expand merely because offline checks pass.
 
 The earlier development attempts exposed two concrete failures: full-body layout
 discovery exhausted 600 seconds before extraction, and serial root paging exhausted
@@ -128,7 +129,8 @@ source access does not imply they saw identical bytes.
 | Tool attempts | At most 64, including invalid or failed attempts |
 | Tool result page | At most 16 KiB; explicit pagination, no concealed truncation |
 | Prepared request | At most 96 KiB and must fit the actual model context with prompts, tools, and output allowance |
-| Unique source exposure | At most 512 KiB, with repeated exposure separately accounted for |
+| Retained native package | At most 1 MiB; this admits every frozen package and is separate from material presented to the model |
+| Prepared view exposure | At most 512 KiB of distinct views, with repeated exposure separately accounted for |
 | HTTP timeout / package wall time | 90 seconds / 600 seconds |
 | Corrections | At most one per stage, still inside all package caps |
 | Automatic retries | Zero HTTP or job retries |
@@ -137,6 +139,15 @@ Stop with explicit budget/context/failure dispositions when a limit prevents
 completion. Do not silently truncate source material, omit failures, replace a
 batch with unreported per-entry requests, or continue a correction outside the
 budget. A deliberate later rerun is a new experiment, not an automatic retry.
+
+The exposure cap conservatively counts locator-view UTF-8 offsets for tool reads,
+and serialized native records/discovery previews for staged preparation. Different
+overlapping views can count the same source bytes more than once; these counters
+are not an exact measure of unique original bytes. Total and repeated submitted
+view bytes are reported separately. SDK retransmission of conversation history is
+outside these view counters and remains subject to request/context limits and
+reported token usage. The direct path supplies its whole native package once and
+must fit the smaller prepared-request allowance.
 
 ## Implementation sequence and acceptance
 
