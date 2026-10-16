@@ -23,7 +23,7 @@ def test_capture_hashes_and_oracle_boundary():
     data = manifest()
     captures = {c["id"]: c for c in data["captures"]}
     ids = [ident for package in data["packages"].values() for ident in package]
-    assert len(ids) == len(set(ids)) == len(captures) == 17
+    assert len(ids) == len(set(ids)) == len(captures) == 19
     assert set(ids) == set(captures)
     for capture in captures.values():
         path = capture["path"]
@@ -86,3 +86,26 @@ def test_rebuild_byte_reproducible(tmp_path):
     ).read_bytes()
     for capture in data["captures"]:
         assert (tmp_path / capture["path"]).read_bytes() == (ROOT / capture["path"]).read_bytes()
+
+
+def test_small_package_complete_native_fragments_and_size():
+    data = manifest()
+    assert data["packages"]["small-a"] == ["small-spd", "small-disctech"]
+    selected = {c["id"]: c for c in data["captures"] if c["id"] in data["packages"]["small-a"]}
+    payloads = {key: (ROOT / c["path"]).read_bytes() for key, c in selected.items()}
+    assert sum(map(len, payloads.values())) < 15 * 1024
+    spd = json.loads(payloads["small-spd"])
+    full = json.loads((ROOT / "corpus/native/dev-a/spd.json").read_bytes())
+    assert spd == full["products"][0]
+    card = payloads["small-disctech"]
+    assert card.count(b'class="facets-item-cell-list"') == 1
+    assert b'data-item-id="17037"' in card
+    ld = json.loads(
+        re.search(rb'<script type="application/ld\+json">(.*?)</script>', card, re.DOTALL).group(1)
+    )
+    assert ld["sku"] == "DEL-345-BHSC-BN-OE"
+    assert ld["offers"]["price"] == 799
+    assert b"We don\xe2\x80\x99t track exact quantities" in card
+    for capture in selected.values():
+        assert capture["provenance"]["parent_sha256"]
+        assert capture["provenance"]["source_commit"]

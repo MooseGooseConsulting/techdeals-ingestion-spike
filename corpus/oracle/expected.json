@@ -977,6 +977,284 @@
         "other 93 products made available to parser",
         "store count mistaken for purchase quantity"
       ]
+    },
+    "small-spd": {
+      "capture_ids": [
+        "small-spd"
+      ],
+      "expected_offer_count": 1,
+      "selection": "Complete native products[0] from pinned collections_all_p1.json; every key retained, JSON reserialized",
+      "native_field_inventory": {
+        "id": 8297455845654,
+        "title": "2.5\" U.2 NVMe to PCIe Adapter Card",
+        "handle": "u-2-nvme-to-pcie-adapter-card",
+        "body_html": "<ul>\n<li>Used to convert one 2.5\" U.2 NVMe drive to PCIe for compatibility in any system with an available PCIe X4 port</li>\n<li>Power and SATA cables not necessary, power and data connection comes fr",
+        "published_at": "2025-05-28T15:07:05-04:00",
+        "created_at": "2023-06-02T14:45:03-04:00",
+        "updated_at": "2026-09-24T07:49:45-04:00",
+        "vendor": "ServerPartDeals",
+        "product_type": "Adapter Cards",
+        "tags": [
+          "capacity:1x U.2 Drive",
+          "formFactor:Full Height PCIe",
+          "interface:PCIe Gen 3.0 x4",
+          "stockstatus:In stock",
+          "type:Adapter Card"
+        ],
+        "variants": [
+          {
+            "id": 44864662864150,
+            "title": "Default Title",
+            "option1": "Default Title",
+            "option2": null,
+            "option3": null,
+            "sku": "U2AIC_NB",
+            "requires_shipping": true,
+            "taxable": true,
+            "featured_image": null,
+            "available": true,
+            "price": "14.99",
+            "grams": 227,
+            "compare_at_price": null,
+            "position": 1,
+            "product_id": 8297455845654,
+            "created_at": "2023-06-02T14:45:03-04:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        ],
+        "images": [
+          {
+            "id": 43563814289686,
+            "created_at": "2024-02-08T13:26:16-05:00",
+            "position": 1,
+            "updated_at": "2025-06-22T22:18:49-04:00",
+            "product_id": 8297455845654,
+            "variant_ids": [],
+            "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWfront.png?v=1750645129",
+            "width": 2000,
+            "height": 2000
+          },
+          {
+            "id": 43563814551830,
+            "created_at": "2024-02-08T13:26:16-05:00",
+            "position": 2,
+            "updated_at": "2025-06-24T11:43:19-04:00",
+            "product_id": 8297455845654,
+            "variant_ids": [],
+            "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl.png?v=1750779799",
+            "width": 2000,
+            "height": 2000
+          },
+          {
+            "id": 43563814125846,
+            "created_at": "2024-02-08T13:26:16-05:00",
+            "position": 3,
+            "updated_at": "2025-06-24T12:08:27-04:00",
+            "product_id": 8297455845654,
+            "variant_ids": [],
+            "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl4.png?v=1750781307",
+            "width": 2000,
+            "height": 2000
+          }
+        ],
+        "options": [
+          {
+            "name": "Title",
+            "position": 1,
+            "values": [
+              "Default Title"
+            ]
+          }
+        ]
+      },
+      "offers": [
+        {
+          "native_id": "8297455845654",
+          "variant_id": "44864662864150",
+          "title": "2.5\" U.2 NVMe to PCIe Adapter Card",
+          "amount": "14.99",
+          "currency": null,
+          "scope": "one adapter card, not an included U.2 drive",
+          "available": true,
+          "seller": "ServerPartDeals",
+          "sku": "U2AIC_NB"
+        }
+      ],
+      "attributes": [
+        {
+          "name": "capacity",
+          "value": "1x U.2 Drive",
+          "meaning": "adapter support capacity, not included drive"
+        },
+        {
+          "name": "formFactor",
+          "value": "Full Height PCIe"
+        },
+        {
+          "name": "interface",
+          "value": "PCIe Gen 3.0 x4"
+        },
+        {
+          "name": "requires_shipping",
+          "value": true
+        },
+        {
+          "name": "taxable",
+          "value": true
+        },
+        {
+          "name": "grams",
+          "value": 227
+        }
+      ],
+      "source_dates": [
+        {
+          "locator": "published_at",
+          "value": "2025-05-28T15:07:05-04:00",
+          "meaning": "product publication"
+        },
+        {
+          "locator": "created_at",
+          "value": "2023-06-02T14:45:03-04:00",
+          "meaning": "product creation"
+        },
+        {
+          "locator": "updated_at",
+          "value": "2026-09-24T07:49:45-04:00",
+          "meaning": "product update"
+        },
+        {
+          "locator": "variants[0].created_at",
+          "value": "2023-06-02T14:45:03-04:00",
+          "meaning": "variant creation"
+        },
+        {
+          "locator": "variants[0].updated_at",
+          "value": "2026-09-24T07:49:45-04:00",
+          "meaning": "variant update"
+        }
+      ],
+      "unknowns": [
+        "currency",
+        "seller location",
+        "condition",
+        "exact available quantity",
+        "trusted retrieval time"
+      ],
+      "requirements": [
+        "retain original body_html even though source body is visibly truncated",
+        "retain image URLs and their creation/update dates separately from product dates",
+        "retain compare_at_price null and all native option/null fields"
+      ],
+      "forbidden": [
+        "treat publication or update date as retrieval time",
+        "claim drive included",
+        "infer USD from retailer identity",
+        "invent installed hardware"
+      ]
+    },
+    "small-disctech": {
+      "capture_ids": [
+        "small-disctech"
+      ],
+      "expected_offer_count": 1,
+      "selection": "Complete exact first native HTML product card and complete associated native JSON-LD Product object, selected and reserialized; no other products",
+      "offers": [
+        {
+          "native_id": "17037",
+          "sku": "DEL-345-BHSC-BN-OE",
+          "title": "Dell 345-BHSC / 50VHM 960GB 2.5\" SFF 12Gbps 512e Read Intensive vSAS Solid State Drive SED Kit SSD DXD9H",
+          "amount": "799.00",
+          "currency": "USD",
+          "price_kind": "ask",
+          "scope": "one SSD kit",
+          "seller": "https://www.disctech.com",
+          "condition": "Brand New",
+          "availability": "In Stock",
+          "url": "https://www.disctech.com/Dell-345-BHSC-50VHM-960GB-2.5-SFF-12Gbps-512e-Read-Intensive-vSAS-Solid-State-Drive-SED-Kit-SSD-DXD9"
+        }
+      ],
+      "attributes": [
+        {
+          "name": "brand",
+          "value": "Dell"
+        },
+        {
+          "name": "MPN",
+          "value": "345-BHSC"
+        },
+        {
+          "name": "capacity",
+          "value": "960GB"
+        },
+        {
+          "name": "speed",
+          "value": "Solid State"
+        },
+        {
+          "name": "interface types",
+          "value": "SAS"
+        },
+        {
+          "name": "form factor",
+          "value": "2.5\" SFF Server Drive"
+        },
+        {
+          "name": "electrical interface",
+          "value": "SAS-3 12Gbps"
+        },
+        {
+          "name": "Encryption/SED Supported",
+          "value": true
+        },
+        {
+          "name": "Enterprise Grade",
+          "value": true
+        },
+        {
+          "name": "warranty",
+          "value": "1 Year DiscTech"
+        },
+        {
+          "name": "title model aliases",
+          "value": [
+            "50VHM",
+            "DXD9H",
+            "512e",
+            "Read Intensive",
+            "vSAS"
+          ]
+        }
+      ],
+      "availability_caveat": "We don’t track exact quantities on this item, but it is usually in stock (95% of the time).",
+      "unknowns": [
+        "exact available quantity",
+        "seller location",
+        "retrieval time",
+        "publication time",
+        "creation time",
+        "update time"
+      ],
+      "source_dates": [],
+      "evidence_locators": {
+        "price": "HTML .product-views-price-exact metas USD/799 and $799.00 display; JSON-LD offers.price/priceCurrency",
+        "seller": "selected original JSON-LD offers.seller.@id",
+        "stock_caveat": "HTML stock tooltip .tip-content",
+        "specifications": "HTML .custom-fields and native product title",
+        "condition": "HTML .condition and native JSON-LD description",
+        "warranty": "HTML .warranty-text and tooltip"
+      },
+      "requirements": [
+        "preserve native description/image URLs/relative links and variantless offer identity",
+        "retain stock caveat as source wording, never as a confidence score",
+        "HTML card and JSON-LD object describe the same one offer"
+      ],
+      "forbidden": [
+        "create two offers from HTML and JSON-LD",
+        "treat quantity-selector options 1..10 as available stock",
+        "assign 95 percent confidence to extraction",
+        "infer a retrieval timestamp"
+      ]
     }
   },
   "gaps": [

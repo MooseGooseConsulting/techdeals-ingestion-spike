@@ -22,7 +22,7 @@ def reply(name, arguments):
             "id": "test",
             "object": "chat.completion",
             "created": 1,
-            "model": "nvidia/nemotron-3-super-120b-a12b:free",
+            "model": "nvidia/nemotron-3.5-lightning:free",
             "choices": [
                 {
                     "index": 0,
@@ -79,6 +79,7 @@ async def test_sdk_tools_output_and_cumulative_limit(monkeypatch, tmp_path):
     assert len(requests) == 3
     assert requests[0]["model"] == settings.model
     assert requests[0]["max_tokens"] == settings.max_output_tokens
+    assert requests[0]["reasoning"] == {"enabled": True}
     names = {tool["function"]["name"] for tool in requests[0]["tools"]}
     assert names == {"read_source", "final_result"}
     assert any(msg["role"] == "tool" for msg in requests[1]["messages"])

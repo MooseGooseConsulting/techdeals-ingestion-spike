@@ -68,6 +68,7 @@ def test_scope_and_resolution(tmp_path):
         "capture_scope",
         "invalid_price_scope",
         "invalid_relationship",
+        "missing_relationship_evidence",
     }
     a["input_refs"][0]["locator"] = "json:/missing"
     assert "unresolved_evidence" in {
@@ -132,3 +133,27 @@ def test_price_cannot_cover_unrelated_offer_in_same_unit(tmp_path):
         i.code
         for i in validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
     } == {"invalid_price_scope"}
+
+
+def test_dates_and_relationships_require_actual_source_references(tmp_path):
+    units, index = setup(tmp_path)
+    a = unit("a")
+    a["offers"] = [
+        {
+            "local_id": "o",
+            "source_dates": [
+                {"original_field": "auction_end", "value": "2026-10-20", "meaning": "auction end"}
+            ],
+            "relations": [{"subject_ref": "o", "predicate": "contains", "object_ref": "i"}],
+            "items": [{"local_id": "i", "role": "included"}],
+        }
+    ]
+    result = ParseBatchResult(batch_id="x", units=[a, unit("b")])
+    assert {i.code for i in validate_result(result, units, index)} == {
+        "missing_date_evidence",
+        "missing_relationship_evidence",
+    }
+    ref = {"capture_id": "a", "locator": "$"}
+    a["offers"][0]["source_dates"][0]["evidence"] = [ref]
+    a["offers"][0]["relations"][0]["evidence"] = [ref]
+    assert not validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)

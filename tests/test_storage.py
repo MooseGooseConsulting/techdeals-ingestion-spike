@@ -51,3 +51,29 @@ def test_rebinding_only_changes_evidence_capture_ids():
         "title": "old",
         "evidence": [{"capture_id": "new", "locator": "$"}],
     }
+
+
+def test_source_date_changes_affect_meaning_but_evidence_ids_do_not():
+    from techdeals_ingestion.storage import _meaning
+
+    first = {
+        "source_dates": [
+            {
+                "value": "2026-10-20",
+                "meaning": "auction end",
+                "evidence": [{"capture_id": "a", "locator": "$"}],
+            }
+        ]
+    }
+    later = {
+        "source_dates": [
+            {
+                "value": "2026-10-21",
+                "meaning": "auction end",
+                "evidence": [{"capture_id": "b", "locator": "$"}],
+            }
+        ]
+    }
+    assert _meaning(first) != _meaning(later)
+    rebound = _rebind(first, {"a": "b"})
+    assert _meaning(first) == _meaning(rebound)

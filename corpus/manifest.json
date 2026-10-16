@@ -23,6 +23,10 @@
       "archive-17",
       "archive-18",
       "central-selected"
+    ],
+    "small-a": [
+      "small-spd",
+      "small-disctech"
     ]
   },
   "captures": [
@@ -350,6 +354,44 @@
         "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
         "selection_rule": "exact enclosing li.product-item bytes for IDs 452449,452448,449525; original head and shared inventory disclaimer text; excludes other 93 product cards",
         "parent_sha256": "8ccc658e87692fef14d18a4bb53acbdb4235aa911d2933cce4151303d6bc2c8a"
+      }
+    },
+    {
+      "id": "small-spd",
+      "path": "corpus/native/small-a/small-spd.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:small-spd",
+      "source_namespace": "serverpartdeals",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "55ed02a6466b819c4902e7156384fe2f10b4f1beb24787c5bbe3c829e1e83e81",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "scripts/ingest/serverpartdeals/fixtures/collections_all_p1.json",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "complete products[0] object (id 8297455845654); JSON reserialized, not original bytes",
+        "parent_sha256": "c9654a08ad3005fd4db87cffb496dccb5f6ac650a29da372aae7080471145826"
+      }
+    },
+    {
+      "id": "small-disctech",
+      "path": "corpus/native/small-a/small-disctech.html",
+      "media_type": "text/html",
+      "acquisition_key": "frozen:small-disctech",
+      "source_namespace": "disctech",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "f29f983cfd22a624292b9f35620f75082187b0653e9ffd02c16adafa9adf6a23",
+      "provenance": {
+        "classification": "selected_native_html_fragment_with_reserialized_jsonld",
+        "origin_path": "scripts/ingest/disctech/fixtures/ssd_listing_p1.html",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "exact first enclosing div.facets-item-cell-list bytes (data-item-id 17037, SKU DEL-345-BHSC-BN-OE); complete matching native JSON-LD Product selected and reserialized with original @context; base resolves native relative URLs; excludes other 23 products",
+        "parent_sha256": "d596fcdb2c1d6631a0a98c2b619c79b11e608d1a4fdb40f54f21ba05eb1b7efb"
       }
     }
   ],

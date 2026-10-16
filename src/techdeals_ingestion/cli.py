@@ -32,7 +32,7 @@ def _store(direct=False):
     return Store(dsn)
 
 
-def parser_fingerprint(settings, arm):
+def parser_fingerprint(settings, arm, direct=False):
     folder = Path(__file__).parent
     names = [
         "contracts.py",
@@ -41,10 +41,12 @@ def parser_fingerprint(settings, arm):
         "provider.py",
         "settings.py",
         "instructions.py",
+        "cli.py",
         "staged.py" if arm == "staged" else "tool_parser.py",
     ]
     return hashlib.sha256(
         settings.config_id.encode()
+        + str(direct).encode()
         + Path("uv.lock").read_bytes()
         + b"".join((folder / name).read_bytes() for name in names)
     ).hexdigest()
@@ -70,12 +72,13 @@ async def run_package(args):
     store = _store()
     # Retention precedes EvidenceIndex: invalid native syntax must not lose its bytes.
     store.retain_package(package)
-    fingerprint = parser_fingerprint(settings, args.arm)
+    fingerprint = parser_fingerprint(settings, args.arm, getattr(args, "direct", False))
     report = {
         "experiment": args.experiment,
         "arm": args.arm,
         "package": args.package,
         "source_revision": _revision(),
+        "execution_strategy": "direct" if getattr(args, "direct", False) else args.arm,
         "parser_fingerprint": fingerprint,
         "config": settings.model_dump(),
         "reused": False,
@@ -102,7 +105,41 @@ async def run_package(args):
                 from .tool_parser import parse_batch
             async with LLMRun(settings, destination / "trace") as session:
                 try:
-                    result = await parse_batch(package, index, session)
+                    if getattr(args, "direct", False):
+                        from .instructions import SEMANTIC_INSTRUCTIONS
+
+                        units = prepare_units(package)
+                        prompt = json.dumps(
+                            {
+                                "batch_id": package.package_id,
+                                "units": [
+                                    {
+                                        "unit_id": unit.unit_id,
+                                        "input_refs": [r.model_dump() for r in unit.input_refs],
+                                        "captures": [
+                                            {
+                                                "capture_id": ref.capture_id,
+                                                "collection_context": index.captures[
+                                                    ref.capture_id
+                                                ].model_dump(mode="json", exclude={"path"}),
+                                                "native": index.resolve(ref),
+                                            }
+                                            for ref in unit.input_refs
+                                        ],
+                                    }
+                                    for unit in units
+                                ],
+                            },
+                            ensure_ascii=False,
+                        )
+                        if len(prompt.encode()) > settings.max_prepared_bytes:
+                            raise ValueError("Direct batch exceeds the prepared input allowance")
+                        response = await session.run(
+                            session.build_agent(ParseBatchResult, SEMANTIC_INSTRUCTIONS), prompt
+                        )
+                        result = response.output
+                    else:
+                        result = await parse_batch(package, index, session)
                 finally:
                     report["stats"] = session.stats()
                     report["coverage"] = getattr(session, "coverage", {})
@@ -203,8 +240,21 @@ def main():
     run.add_argument("--output", required=True)
     run.add_argument("--attempt")
     run.add_argument(
+        "--direct",
+        action="store_true",
+        help="One small typed batch; bypass discovery and inspection tools",
+    )
+    run.add_argument(
         "--fresh", action="store_true", help="Explicit new interpretation, bypass reuse"
     )
+    evaluation = sub.add_parser(
+        "evaluate", help="Inspect frozen semantic expectations and saved SQL reads"
+    )
+    evaluation.add_argument("--manifest", default="corpus/manifest.json")
+    evaluation.add_argument("--oracle", default="corpus/oracle/expected.json")
+    evaluation.add_argument("--package", required=True)
+    evaluation.add_argument("--trial", required=True)
+    evaluation.add_argument("--output", required=True)
     query = sub.add_parser("query", help="Read a documented SQL view")
     query.add_argument("view", choices=sorted(VIEWS))
     query.add_argument("--experiment")
@@ -238,6 +288,31 @@ def main():
     elif args.command == "migrate":
         _store(direct=True).migrate()
         print("Initialized the configured exercise database")
+    elif args.command == "evaluate":
+        from .evaluate import evaluate, evaluate_persisted
+
+        package = next(p for p in load_work_packages(args.manifest) if p.package_id == args.package)
+        trial = Path(args.trial)
+        result = ParseBatchResult.model_validate_json((trial / "result.json").read_text())
+        report = evaluate(result, package, args.oracle)
+        if (trial / "database-rows.json").exists():
+
+            def read_saved(name):
+                path = trial / name
+                return json.loads(path.read_text()) if path.exists() else None
+
+            report["persistence"] = evaluate_persisted(
+                result,
+                read_saved("database-rows.json"),
+                read_saved("database-prices.json"),
+                read_saved("database-current.json"),
+            )
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            raise ValueError("Choose a new evaluation output; preserve earlier reviews")
+        destination.write_text(_json(report))
+        print(_json(report), end="")
     elif args.command == "query":
         print(_json(_store().query(args.view, experiment_id=args.experiment, arm=args.arm)), end="")
     else:

@@ -1,0 +1,83 @@
+{
+  "id": 8297455845654,
+  "title": "2.5\" U.2 NVMe to PCIe Adapter Card",
+  "handle": "u-2-nvme-to-pcie-adapter-card",
+  "body_html": "<ul>\n<li>Used to convert one 2.5\" U.2 NVMe drive to PCIe for compatibility in any system with an available PCIe X4 port</li>\n<li>Power and SATA cables not necessary, power and data connection comes fr",
+  "published_at": "2025-05-28T15:07:05-04:00",
+  "created_at": "2023-06-02T14:45:03-04:00",
+  "updated_at": "2026-09-24T07:49:45-04:00",
+  "vendor": "ServerPartDeals",
+  "product_type": "Adapter Cards",
+  "tags": [
+    "capacity:1x U.2 Drive",
+    "formFactor:Full Height PCIe",
+    "interface:PCIe Gen 3.0 x4",
+    "stockstatus:In stock",
+    "type:Adapter Card"
+  ],
+  "variants": [
+    {
+      "id": 44864662864150,
+      "title": "Default Title",
+      "option1": "Default Title",
+      "option2": null,
+      "option3": null,
+      "sku": "U2AIC_NB",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": true,
+      "price": "14.99",
+      "grams": 227,
+      "compare_at_price": null,
+      "position": 1,
+      "product_id": 8297455845654,
+      "created_at": "2023-06-02T14:45:03-04:00",
+      "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+  ],
+  "images": [
+    {
+      "id": 43563814289686,
+      "created_at": "2024-02-08T13:26:16-05:00",
+      "position": 1,
+      "updated_at": "2025-06-22T22:18:49-04:00",
+      "product_id": 8297455845654,
+      "variant_ids": [],
+      "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWfront.png?v=1750645129",
+      "width": 2000,
+      "height": 2000
+    },
+    {
+      "id": 43563814551830,
+      "created_at": "2024-02-08T13:26:16-05:00",
+      "position": 2,
+      "updated_at": "2025-06-24T11:43:19-04:00",
+      "product_id": 8297455845654,
+      "variant_ids": [],
+      "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl.png?v=1750779799",
+      "width": 2000,
+      "height": 2000
+    },
+    {
+      "id": 43563814125846,
+      "created_at": "2024-02-08T13:26:16-05:00",
+      "position": 3,
+      "updated_at": "2025-06-24T12:08:27-04:00",
+      "product_id": 8297455845654,
+      "variant_ids": [],
+      "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl4.png?v=1750781307",
+      "width": 2000,
+      "height": 2000
+    }
+  ],
+  "options": [
+    {
+      "name": "Title",
+      "position": 1,
+      "values": [
+        "Default Title"
+      ]
+    }
+  ]
+}

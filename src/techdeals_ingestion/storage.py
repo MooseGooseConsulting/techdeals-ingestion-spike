@@ -69,11 +69,7 @@ def _rebind(value, mapping):
 def _meaning(value):
     """Compare asserted meaning independently of changing evidence capture locators."""
     if isinstance(value, dict):
-        return {
-            k: _meaning(v)
-            for k, v in value.items()
-            if k not in {"evidence", "source_dates", "identity_claim"}
-        }
+        return {k: _meaning(v) for k, v in value.items() if k not in {"evidence", "identity_claim"}}
     if isinstance(value, list):
         return [_meaning(v) for v in value]
     return value

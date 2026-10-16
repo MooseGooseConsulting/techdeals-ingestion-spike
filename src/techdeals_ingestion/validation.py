@@ -111,7 +111,12 @@ def validate_result(
                 for ref in price.scope_refs:
                     if ref not in scope_ids:
                         issue("invalid_price_scope", path, ref)
+            for date in offer.source_dates:
+                if (date.value is not None or date.original is not None) and not date.evidence:
+                    issue("missing_date_evidence", offer_path, date.original_field)
             for relationship in offer.relations:
+                if not relationship.evidence:
+                    issue("missing_relationship_evidence", offer_path, relationship.predicate)
                 for ref in (relationship.subject_ref, relationship.object_ref):
                     if ref not in valid:
                         issue("invalid_relationship", path, ref)

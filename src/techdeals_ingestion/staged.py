@@ -50,6 +50,7 @@ class View:
     records: list[dict]
     issues: list[str]
     parent_id: str | None = None
+    coverage: dict | None = None
 
 
 def _dump(value) -> str:
@@ -213,28 +214,155 @@ def _select_records(refs, view, index):
     }
     for ref in refs:
         descendants = _descendants(ref, index)
-        if not descendants.intersection(represented):
+        if ref.locator == "$":
+            records = [
+                r
+                for r in records
+                if "collection_context" in r or r["ref"]["capture_id"] != ref.capture_id
+            ]
+            records.append({"ref": ref.model_dump(), "text": index.resolve(ref)})
+        elif not descendants.intersection(represented):
             records.append({"ref": ref.model_dump(), "text": index.resolve(ref)})
     return records
+
+
+def _overview(view: View, index: EvidenceIndex) -> dict:
+    """Syntactic layout only: bounded previews are discovery hints, never extraction evidence."""
+    captures = []
+    for root in view.unit.input_refs:
+        snapshot = index.snapshot([root.capture_id])[0]
+        refs = [
+            EvidenceRef(capture_id=root.capture_id, locator=r["locator"]) for r in snapshot["refs"]
+        ]
+        media = index.captures[root.capture_id].media_type
+        rows = []
+        inventory = [r.locator for r in refs]
+        if "html" in media:
+            # Canonical preorder aliases form an exact, compact complete inventory.
+            numbers = [int(r.locator[6:]) for r in refs if r.locator.startswith("html:@")]
+            inventory = {
+                "root": "$",
+                "html_preorder_range_inclusive": [min(numbers), max(numbers)] if numbers else [],
+                "count": len(numbers),
+            }
+            candidates = set()
+            for ref in refs:
+                children = []
+                offset = 0
+                while True:
+                    page = index.list_children(ref, offset=offset)
+                    children.extend(EvidenceRef.model_validate(r) for r in page["refs"])
+                    if page["next_offset"] is None:
+                        break
+                    offset = page["next_offset"]
+                if ref.locator == "$":
+                    candidates.update(r.locator for r in children)
+                    continue
+                soup = BeautifulSoup(index.resolve(ref), "html.parser")
+                node = next((n for n in soup.contents if isinstance(n, Tag)), None)
+                if node is None:
+                    continue
+                if node.name in ("script", "input", "meta") or "hidden" in node.attrs:
+                    candidates.add(ref.locator)
+                # Repeated nontrivial sibling subtrees are potential native entries,
+                # without interpreting a CSS class, field name, or source identity.
+                if len(children) >= 2:
+                    tags = {}
+                    for child in children:
+                        raw = index.resolve(child)
+                        parsed = BeautifulSoup(raw, "html.parser").find()
+                        if parsed and len(raw.encode()) >= 512 and len(parsed.find_all()) >= 3:
+                            tags.setdefault(parsed.name, []).append(child)
+                    for siblings in tags.values():
+                        if len(siblings) >= 2:
+                            candidates.update(r.locator for r in siblings)
+            for ref in refs:
+                if ref.locator not in candidates:
+                    continue
+                soup = BeautifulSoup(index.resolve(ref), "html.parser")
+                node = soup.find()
+                rows.append(
+                    [
+                        ref.locator,
+                        node.name if node else "text",
+                        len(index.resolve(ref).encode()),
+                        _dump(node.attrs)[:80] if node else "",
+                        (
+                            " ".join(str(x) for x in node.contents)
+                            if node and node.name == "script"
+                            else soup.get_text(" ", strip=True)
+                        )[:120],
+                    ]
+                )
+            columns = ["locator", "tag", "source_bytes", "attribute_preview", "text_preview"]
+        elif "json" in media:
+            inventory = {"all_locators_in_summary_rows": True, "count": len(refs) - 1}
+            for ref in refs:
+                if not ref.locator.startswith("json:"):
+                    continue
+                value = json.loads(index.resolve(ref))
+                kind = type(value).__name__
+                rows.append(
+                    [
+                        ref.locator,
+                        kind,
+                        len(value) if isinstance(value, (dict, list, str)) else None,
+                        list(value) if isinstance(value, dict) else None,
+                        str(value)[:60] if not isinstance(value, (dict, list)) else None,
+                    ]
+                )
+            columns = ["locator", "type", "length", "keys", "scalar_preview"]
+        else:
+            for ref in refs:
+                text = index.resolve(ref)
+                rows.append([ref.locator, len(text.encode()), text[:180]])
+            columns = ["locator", "source_bytes", "text_preview"]
+        captures.append(
+            {
+                "capture_id": root.capture_id,
+                "inventory": inventory,
+                "summary_columns": columns,
+                "summaries": rows,
+            }
+        )
+    return {
+        "captures": captures,
+        "preview_warning": "Summaries are bounded syntactic previews only. Full indexed source will be gathered for selected refs.",
+    }
+
+
+def _overview_pages(overview, budget):
+    if _size(overview) <= budget:
+        return [overview]
+    pages = []
+    for capture in overview["captures"]:
+        base = {**capture, "summaries": []}
+        rows = []
+        for row in capture["summaries"]:
+            if rows and _size({**base, "summaries": rows + [row]}) > budget:
+                pages.append({**base, "summaries": rows})
+                rows = []
+            rows.append(row)
+        pages.append({**base, "summaries": rows})
+    return pages
 
 
 async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
     groups = []
     context = []
-    chunks = _chunks(
-        view.records,
-        getattr(session, "settings", None).max_prepared_bytes * 2 // 3
+    budget = (
+        getattr(session, "settings", None).max_prepared_bytes
         if getattr(session, "settings", None)
-        else CHUNK_BYTES,
+        else 96 * 1024
     )
-    for number, chunk in enumerate(chunks):
+    pages = _overview_pages(_overview(view, index), budget - 4096)
+    for number, page in enumerate(pages):
         prompt = _dump(
             {
                 "unit_id": view.unit.unit_id,
-                "chunk": number,
-                "total_chunks": len(chunks),
-                "prior_groups": [[r.model_dump() for r in group] for group in groups],
-                "material": _wire_records(chunk),
+                "overview_page": number,
+                "total_pages": len(pages),
+                "overview": page,
             }
         )
         try:
@@ -242,28 +370,27 @@ async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
                 session,
                 Discovery,
                 SEMANTICS
-                + "\nLayout discovery only: inspect the ENTIRE chunk. Return groups of indexed refs, one logical product/purchase/native entry per group, with all relevant variants. JSON nested refs use json: RFC6901 pointers, so select individual array entries via their indexed pointers. Select enclosing HTML card/row refs so descendants retain titles/prices. If this chunk continues or duplicates a prior_groups entry, include its existing indexed ref in the same group to establish the association. Group duplicated HTML/JSON-LD representations of the SAME product together, never two offers. Return shared enclosing context_refs separately. Include ALL offer material, never code. Mark no_offer_material only for irrelevant navigation/layout. refs is a compatibility fallback for a single group.",
+                + "\nLayout discovery from a syntactic overview only. Previews are incomplete; do not extract facts now. Return indexed ref groups, ONE logical product/purchase/native entry per group, preserving variants and grouping duplicate HTML/JSON-LD representations. Select enclosing card/row/object refs so full descendants will be gathered. Select all ordinary fields necessary for complete common facts, descriptions, source dates and prices. Return shared context_refs separately. JSON refs are RFC6901 pointers. HTML inventory gives every valid html:@N alias; listed subtree summaries highlight repeated structure. The complete source remains indexed. Never return code. Mark no_offer_material only if no offer material is present. refs is a fallback for one group.",
                 prompt,
             )
             allowed = {r.capture_id for r in view.unit.input_refs}
-            selections = [
+            for ref in [
                 *result.refs,
                 *result.context_refs,
-                *(ref for group in result.groups for ref in group),
-            ]
-            for ref in selections:
+                *(r for group in result.groups for r in group),
+            ]:
                 if ref.capture_id not in allowed:
                     raise ValueError("discovery selected a different capture")
                 index.resolve(ref)
             discovered = result.groups or ([result.refs] if result.refs else [])
             if result.disposition != "no_offer_material" and not discovered:
-                raise ValueError("relevant discovery chunk has no selected groups")
+                raise ValueError("relevant discovery overview has no selected groups")
             groups.extend(discovered)
             context.extend(result.context_refs)
             view.issues.extend(result.issues)
         except Exception as exc:  # noqa: BLE001 - isolate provider/schema failures per unit
             view.issues.append(
-                f"layout chunk {number + 1}/{len(chunks)} failed: {type(exc).__name__}"
+                f"layout overview {number + 1}/{len(pages)} failed: {type(exc).__name__}"
             )
     # Merge groups sharing an exact indexed reference: source identity, not title guessing.
     merged = []
@@ -290,6 +417,15 @@ async def _discover(view: View, index: EvidenceIndex, session) -> list[View]:
                 _select_records([*context, *group], view, index),
                 list(view.issues),
                 view.unit.unit_id,
+                {
+                    "selected_refs": [r.model_dump() for r in [*context, *group]],
+                    "indexed_regions": sum(
+                        len(x["refs"])
+                        for x in index.snapshot([r.capture_id for r in view.unit.input_refs])
+                    ),
+                    "deferred_regions": "Complete indexed inventory minus descendant closure of selected_refs",
+                    "coverage_meaning": "Selected refs include full descendant closure; remaining indexed regions are deferred, not semantically verified.",
+                },
             )
         )
     return views
@@ -302,6 +438,7 @@ def _payload(views: list[View]) -> dict:
                 "unit_id": v.unit.unit_id,
                 "input_refs": [r.model_dump() for r in v.unit.input_refs],
                 "material": _wire_records(v.records),
+                "layout_coverage": v.coverage,
             }
             for v in views
         ]

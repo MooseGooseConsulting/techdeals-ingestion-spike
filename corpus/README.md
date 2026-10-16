@@ -43,3 +43,16 @@ and classifications. No request to a collector or model is made during freezing.
 occurrence retention, selected-card isolation and a byte-for-byte rebuild.
 Rebuilding requires the pinned local source checkouts and ZIP; ordinary corpus
 consumption requires only this checkout.
+
+## Initial small experiment
+
+`small-a` contains two complete native records in different formats: the first
+ServerPartDeals product object and the first DiscTech HTML product card with its
+matching complete native JSON-LD Product. The JSON object is reserialized; the
+HTML card bytes are exact, and the selected JSON-LD object is reserialized.
+The generated HTML wrapper/base is documented selection context. No other
+products are included. Each fragment retains its parent hash and pinned full
+source path. Existing 17 captures and package partitions remain unchanged.
+The total allowlist now has 19 captures, including these two small fragments.
+Independent evaluator-only meanings are in `small-spd` and `small-disctech`
+oracle cases; these remain excluded from model input.

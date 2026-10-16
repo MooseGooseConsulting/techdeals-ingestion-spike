@@ -20,7 +20,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterModelSettings
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.usage import RunUsage, UsageLimits
 
@@ -90,9 +90,22 @@ class _CountToolAttempts(AbstractCapability):
         self.session.preflight_checks.append(budget)
         if not budget["accepted"]:
             raise UsageLimitExceeded("Conservative context preflight exceeds model context window")
+        self.session.record_event(
+            {
+                "event": "model_request_preflight",
+                "accepted": True,
+                "completed_requests": self.session.usage.requests,
+            }
+        )
         return request_context
 
     async def after_model_request(self, ctx, *, request_context, response):
+        self.session.record_event(
+            {
+                "event": "model_response",
+                "tool_names": [p.tool_name for p in response.parts if isinstance(p, ToolCallPart)],
+            }
+        )
         # Count before schema validation/tool dispatch, including malformed arguments.
         self.session.tool_attempts += sum(isinstance(part, ToolCallPart) for part in response.parts)
         if self.session.tool_attempts > self.session.settings.max_tool_calls:
@@ -156,7 +169,10 @@ class LLMRun:
             deps_type=deps_type,
             capabilities=[_CountToolAttempts(self)],
             retries=self.settings.correction_retries if retry_budget is None else retry_budget,
-            model_settings={"max_tokens": self.settings.max_output_tokens},
+            model_settings=OpenRouterModelSettings(
+                max_tokens=self.settings.max_output_tokens,
+                openrouter_reasoning={"enabled": self.settings.reasoning_enabled},
+            ),
         )
 
     async def run(self, agent: Agent, prompt: str, deps: Any = None) -> Any:
@@ -194,6 +210,14 @@ class LLMRun:
                 self.trace_dir.mkdir(parents=True, exist_ok=True)
                 (self.trace_dir / f"run-{len(self.runs):03d}.json").write_text(
                     json.dumps({**self.stats(), "run": record}, indent=2, default=str) + "\n"
+                )
+
+    def record_event(self, event: dict[str, Any]) -> None:
+        if self.trace_dir is not None:
+            self.trace_dir.mkdir(parents=True, exist_ok=True)
+            with (self.trace_dir / "events.jsonl").open("a") as output:
+                output.write(
+                    json.dumps({"elapsed_seconds": time.monotonic() - self.started, **event}) + "\n"
                 )
 
     def stats(self) -> dict[str, Any]:

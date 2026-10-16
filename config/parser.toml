@@ -1,6 +1,7 @@
 # Both candidates use this one free model. Credentials arrive through Doppler.
 base_url = "https://openrouter.ai/api/v1"
-model = "nvidia/nemotron-3-super-120b-a12b:free"
+model = "nvidia/nemotron-3.5-lightning:free"
+reasoning_enabled = true
 batch_size = 8
 max_prepared_bytes = 98304
 max_package_bytes = 524288
@@ -8,7 +9,7 @@ tool_page_bytes = 16384
 max_requests = 12
 max_tool_calls = 64
 max_output_tokens = 16384
-context_window_tokens = 262144
+context_window_tokens = 1000000
 timeout_seconds = 90
 package_timeout_seconds = 600
 correction_retries = 1

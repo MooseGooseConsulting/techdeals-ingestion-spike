@@ -265,6 +265,66 @@ def main():
         "exact enclosing li.product-item bytes for IDs 452449,452448,449525; original head and shared inventory disclaimer text; excludes other 93 product cards",
         parent=CENTRAL_SHA,
     )
+    # Initial two-record experiment: retain complete native objects/cards only.
+    manifest["packages"]["small-a"] = []
+    rel = "scripts/ingest/serverpartdeals/fixtures/collections_all_p1.json"
+    spd_data = pinned(args.handoff, HANDOFF_COMMIT, rel)
+    product = json.loads(spd_data)["products"][0]
+    assert product["id"] == 8297455845654
+    add(
+        "small-a",
+        "small-spd",
+        (json.dumps(product, ensure_ascii=False, indent=2) + "\n").encode(),
+        "application/json",
+        "serverpartdeals",
+        rel,
+        HANDOFF_COMMIT,
+        "parsed_raw_fragment",
+        "complete products[0] object (id 8297455845654); JSON reserialized, not original bytes",
+        parent=sha(spd_data),
+    )
+    rel = "scripts/ingest/disctech/fixtures/ssd_listing_p1.html"
+    html_data = pinned(args.handoff, HANDOFF_COMMIT, rel)
+    start = html_data.index(b'<div class="facets-item-cell-list"')
+    depth = 0
+    for match in re.finditer(rb"</?div\b[^>]*>", html_data[start:]):
+        depth += -1 if match.group().startswith(b"</") else 1
+        if depth == 0:
+            end = start + match.end()
+            break
+    card = html_data[start:end]
+    assert b'data-item-id="17037"' in card
+    native_ld = json.loads(
+        re.search(
+            rb"<script[^>]*application/ld\+json[^>]*>(.*?)</script>",
+            html_data,
+            re.DOTALL,
+        ).group(1)
+    )
+    selected_product = native_ld["@graph"][0]["itemListElement"][0]["item"]
+    assert selected_product["sku"] == "DEL-345-BHSC-BN-OE"
+    # Context URI is copied from the original script; base is the native seller URI.
+    selected_ld = {"@context": native_ld["@context"], **selected_product}
+    small_html = (
+        b'<html><head><base href="https://www.disctech.com/">'
+        b'<script type="application/ld+json">'
+        + json.dumps(selected_ld, ensure_ascii=False, indent=2).encode()
+        + b"</script></head><body>"
+        + card
+        + b"</body></html>\n"
+    )
+    add(
+        "small-a",
+        "small-disctech",
+        small_html,
+        "text/html",
+        "disctech",
+        rel,
+        HANDOFF_COMMIT,
+        "selected_native_html_fragment_with_reserialized_jsonld",
+        "exact first enclosing div.facets-item-cell-list bytes (data-item-id 17037, SKU DEL-345-BHSC-BN-OE); complete matching native JSON-LD Product selected and reserialized with original @context; base resolves native relative URLs; excludes other 23 products",
+        parent=sha(html_data),
+    )
     (args.output / "corpus/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 

@@ -28,7 +28,11 @@ class Session:
         if agent is Discovery:
             return SimpleNamespace(
                 output=Discovery(
-                    refs=[r["ref"] for r in data["material"]["records"]], disposition="relevant"
+                    refs=[
+                        {"capture_id": c["capture_id"], "locator": "$"}
+                        for c in data["overview"].get("captures", [data["overview"]])
+                    ],
+                    disposition="relevant",
                 )
             )
         units = data.get("input", data)["units"]
@@ -111,12 +115,16 @@ async def test_failed_pack_preserves_other_pack(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_large_capture_all_discovery_chunks_examined(tmp_path):
+async def test_large_capture_complete_overview_and_untruncated_root_selection(tmp_path):
     p, index = package(tmp_path, text="x" * 190_000)
     session = Session()
     result = await parse_batch(p, index, session)
     discoveries = [c for c in session.calls if c[0] is Discovery]
-    assert {c[1]["chunk"] for c in discoveries} == set(range(discoveries[0][1]["total_chunks"]))
+    assert len(discoveries) == 1
+    capture = discoveries[0][1]["overview"]["captures"][0]
+    assert capture["inventory"] == ["$"]
+    assert capture["summaries"][0][1] == 190_000
+    assert index.originals["c0"] == b"x" * 190_000
     assert result.units[0].status == "failed"
     assert "no truncation" in result.units[0].issues[0]
 
@@ -238,3 +246,53 @@ async def test_group_merge_prefixes_ids_and_remaps_price_scope(tmp_path):
     assert len({o.local_id for o in offers}) == 2
     assert all(o.prices[0].scope_refs == [o.local_id] for o in offers)
     assert validate_result(result, prepare_units(p), index) == []
+
+
+def test_root_selection_includes_complete_original_not_metadata_only(tmp_path):
+    from techdeals_ingestion.contracts import EvidenceRef, prepare_units
+    from techdeals_ingestion.staged import _prepare, _select_records
+
+    text = "<html><body><p>" + "z" * 20000 + "</p></body></html>"
+    p, index = package(tmp_path, text=text, media="text/html")
+    view = _prepare(prepare_units(p)[0], index)
+    selected = _select_records([EvidenceRef(capture_id="c0", locator="$")], view, index)
+    assert [r["text"] for r in selected if "text" in r] == [text]
+
+
+def test_actual_development_overviews_fit_single_discovery_request():
+    from pathlib import Path
+
+    from techdeals_ingestion.contracts import prepare_units
+    from techdeals_ingestion.evidence import load_work_packages
+    from techdeals_ingestion.staged import _overview, _overview_pages, _prepare, _size
+
+    # Fixed development source inputs only; oracle and held-back source bytes are never read.
+    manifest = Path(__file__).parents[1] / "corpus/manifest.json"
+    sizes = {}
+    for p in load_work_packages(manifest):
+        if p.package_id not in ("dev-a", "dev-b"):
+            continue
+        index = EvidenceIndex(p.captures)
+        for unit in prepare_units(p):
+            overview = _overview(_prepare(unit, index), index)
+            pages = _overview_pages(overview, 96 * 1024 - 4096)
+            assert len(pages) == 1, unit.unit_id
+            assert _size(pages[0]) < 96 * 1024 - 4096
+            sizes[unit.unit_id] = _size(pages[0])
+            for capture in overview["captures"]:
+                inventory = capture["inventory"]
+                if isinstance(inventory, dict) and "html_preorder_range_inclusive" in inventory:
+                    low, high = inventory["html_preorder_range_inclusive"]
+                    actual = [
+                        r["locator"]
+                        for r in index.snapshot([capture["capture_id"]])[0]["refs"]
+                        if r["locator"].startswith("html:@")
+                    ]
+                    assert {f"html:@{i}" for i in range(low, high + 1)} == set(actual)
+                elif isinstance(inventory, dict):
+                    assert {row[0] for row in capture["summaries"]} == {
+                        r["locator"]
+                        for r in index.snapshot([capture["capture_id"]])[0]["refs"]
+                        if r["locator"].startswith("json:")
+                    }
+    assert "disctech" in sizes and "spd" in sizes

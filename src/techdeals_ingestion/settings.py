@@ -12,13 +12,14 @@ class ParserSettings(BaseModel):
 
     base_url: str
     model: str
+    reasoning_enabled: bool = True
     batch_size: int = Field(gt=0)
     max_prepared_bytes: int = Field(gt=0)
     max_package_bytes: int = Field(gt=0)
     tool_page_bytes: int = Field(gt=0)
     max_requests: int = Field(gt=0)
     max_tool_calls: int = Field(gt=0)
-    context_window_tokens: int = Field(default=262144, gt=0)
+    context_window_tokens: int = Field(default=1000000, gt=0)
     max_output_tokens: int = Field(gt=0)
     timeout_seconds: int = Field(gt=0)
     package_timeout_seconds: int = Field(gt=0)

@@ -1,8 +1,9 @@
 # Bounded parser comparison and queryable evidence
 
-Status: approved implementation design, 2026-10-16. Implementation is in progress.
-The model capability probe, paired parser results, Neon persistence, and SQL
-acceptance results must be recorded before any claim that the exercise works.
+Status: implementation in progress, revised 2026-10-16 after the owner's instruction
+to start substantially smaller and retain reasoning. The first review gate is the
+two-record extraction below. The larger candidate comparison remains subsequent
+experimental work, not an established working parser.
 
 Read [the required outcomes](problems.md) and [the data contract](data-contract.md)
 first. Other agents consume documented SQL facts and relationships. The parser
@@ -10,6 +11,31 @@ agents described here interpret captured evidence; they are distinct from those
 consumer agents. This exercise implements a bounded comparison of two parser
 candidates and actual PostgreSQL storage. It does not solve every broader
 TechDeals problem or establish production readiness.
+
+## First gate: two small records, one extraction
+
+Start with package `small-a`: one complete native ServerPartDeals product object
+(2,494 bytes) and one complete DiscTech product card plus its corresponding native
+JSON-LD Product (9,090 bytes). They retain their parent source hashes, explicit
+selection rules, and unknown acquisition times. Their independent expectations
+are evaluator-only.
+
+Send both complete records together in one typed extraction request. Bypass
+layout discovery and inspection-tool loops. Persist raw captures first; validate
+the result, write valid units to Neon, and inspect every output field, original
+price, source-date meaning, and SQL round trip against these two inputs. Keep
+unknown seller/location/date facts unknown rather than filling them for appearance.
+
+Use `run --package small-a --arm staged --direct`. Inspect the transcript before
+expanding. A schema correction is visible and counted; failed output stays failed.
+Only after this small path produces useful, inspected records should the larger
+A/B development packages or held-back comparison run. The existing experimental
+candidate implementations do not constitute proof of that broader behavior.
+
+The earlier development attempts exposed two concrete failures: full-body layout
+discovery exhausted 600 seconds before extraction, and serial root paging exhausted
+twelve tool requests before final output. Their retained transcripts are evidence
+for revising the execution design, not successful ingestion examples.
 
 ## Shared implementation boundary
 
@@ -26,9 +52,14 @@ fields that need it. Incomplete interpretation does not block basic intake.
 The owner's personal use of a query command or buying interface is not a
 requirement.
 
-Commit model `nvidia/nemotron-3-super-120b-a12b:free` and the OpenRouter endpoint
+Commit model `nvidia/nemotron-3.5-lightning:free` and the OpenRouter endpoint
 `https://openrouter.ai/api/v1` in configuration. There is no alternative model or
-endpoint fallback. Credentials and connection details come from Doppler-injected
+endpoint fallback. Reasoning is explicitly enabled; do not disable it as a latency
+shortcut. Lightning's free route supports tools but does not advertise native
+`response_format`/`structured_outputs`. The harness uses PydanticAI `ToolOutput`
+and validates returned arguments locally, rather than claiming provider-enforced
+JSON Schema. The actual small call must establish availability and suitability.
+Credentials and connection details come from Doppler-injected
 process environment; the application must not load `.env` files. Secrets never
 belong in committed captures, prompts, logs, or reports.
 
@@ -78,7 +109,7 @@ per extraction batch, retaining enclosing context and explicit dispositions for
 unattempted units. A package may require several batches.
 
 The tool-reading candidate runs a scoped loop exposing only `list_children`,
-`read_region`, and `search` over the same package's capture allowlist. It chooses
+`read_region`, batched `read_regions`, and `search_capture` over the same package's capture allowlist. It chooses
 what to inspect and returns the same typed final output. It cannot browse, read
 other packages, see evaluator files, or fetch arbitrary paths. Validate tool
 arguments and charge failed calls to the tool-attempt budget. Tool reading and
