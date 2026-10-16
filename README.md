@@ -4,28 +4,30 @@ Turn heterogeneous hardware listings into a database that other agents can
 query and tally for their analysis. Preserve the source, scraped item
 and price facts, source-stated associations, and changes over time.
 
-This fresh repository implements a bounded comparison of two shared LLM parser
-candidates: conditional layout discovery followed by batch extraction and
-validation, and a scoped evidence-reading tool loop. Both use the same typed
-output, allowed evidence, and budgets. Accepted results must reach actual Neon
-PostgreSQL and documented SQL reads. Parser agents and database consumer agents
-have separate roles.
+The immediate design is a shared LLM extraction path: native input -> entries
+with named fields and nested prices -> validated PostgreSQL records. The current
+executable still contains an overbuilt graph-extraction prototype and has not
+passed source-to-SQL acceptance. Read the design correction before extending it.
 
 | Document | Purpose |
 |---|---|
+| [Design correction](docs/design.md) | What to build, what the model returns, and what the application owns |
 | [Problems and required outcomes](docs/problems.md) | The broader outcomes and limits of the initial exercise |
 | [Data contract](docs/data-contract.md) | Evidence, output meanings, identity, dates, immutable interpretations, acceptance, history, and SQL consumption |
-| [Implementation plan](docs/plan.md) | Frozen packages, two candidates, exact limits, implementation order, and requirements-to-checks trace |
+| [Implementation plan](docs/plan.md) | Implementation sequence and source-to-SQL acceptance |
 
-Read them in that order. The design accepts unfamiliar sources through generic
+Read the design and plan first; the other documents retain source and history
+requirements. The design accepts unfamiliar sources through generic
 JSON/HTML/XML/CSV/text readers, without a handwritten semantic parser for each
 site. Each new or changed entry needing interpretation still needs the model to
 read relevant evidence. Compatible unchanged content may reuse an accepted
 interpretation while preserving a later observation. Unknown dates and identity
 remain explicit.
 
-The runtime uses Python 3.12, PydanticAI `slim[openrouter]`, typed Pydantic output,
-Beautiful Soup generic readers, `psycopg`, `uv`, `pytest`, and `ruff`. The committed
+The existing prototype uses Python 3.12, PydanticAI `slim[openrouter]`, typed
+Pydantic output, Beautiful Soup generic readers, `psycopg`, `uv`, `pytest`, and
+`ruff`. The commands below describe that prototype, pending the contract
+replacement in the plan. The committed
 model is `nvidia/nemotron-3.5-lightning:free` through
 `https://openrouter.ai/api/v1`, with no alternative-model fallback. The exact
 model must pass the structured multi-input and tools-plus-final capability

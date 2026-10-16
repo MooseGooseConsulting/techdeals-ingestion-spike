@@ -1,8 +1,12 @@
 # Scraped records, dates, parsing, and deduplication
 
-Status: approved design being implemented, 2026-10-16. These are the data
-behaviors to verify in the bounded comparison. They do not claim successful
-model runs, database creation, or live SQL acceptance.
+Status: source, date and history requirements, revised 2026-10-16.
+The [design correction](design.md) now governs the model-facing output and
+execution path. The output/comparison sections below describe the earlier
+prototype and require alignment during replacement; they do not mandate its
+graph contract or experimental machinery. Source preservation, date semantics,
+identity uncertainty and deduplication requirements remain relevant. These are
+requirements to demonstrate, not claims of successful extraction.
 
 The [problems document](problems.md) explains what needs solving. This document
 describes what scraped information means and how ingestion should handle it.
@@ -295,10 +299,9 @@ incompatible prior result is not a successful reusable parse. The
 freshness, and history. Reuse for unchanged content does not remove the work
 required to interpret genuinely new or meaningfully changed entries.
 
-This is the approved execution model being implemented, not demonstrated functionality. We have
-not yet established whether its output is sufficiently complete and correct,
-or whether it can process the intended ingestion volume in practice. The first
-parser experiment must examine those questions using varied real inputs.
+These are behaviors to implement and verify. Useful extraction and intended
+ingestion volume remain unestablished; the [current plan](plan.md) requires
+source-to-output-to-SQL demonstrations against varied real inputs.
 
 ## Date meanings
 

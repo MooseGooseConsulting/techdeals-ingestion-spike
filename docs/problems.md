@@ -59,7 +59,7 @@ real source and hardware shapes from the first working delivery. Establish the
 initial representation against several different shapes together, including
 one input producing many records and several inputs describing the same listing.
 One server family or one collector's layout cannot establish that result.
-The approved approach tests shared LLM-backed parsers, supported by general format
+The approach uses shared LLM-backed extraction, supported by general format
 readers and reliable storage behavior. It must be tried against unfamiliar
 sources. Requiring a handwritten parser or field mapping for every new source
 would leave the central problem unsolved.
@@ -169,21 +169,15 @@ must protect the existing cluster and production data. Production incorporation
 follows demonstration of useful behavior and review of the affected consumers
 and history.
 
-## What the initial exercise establishes
+## What the next implementation establishes
 
-The approved first implementation compares two shared parser candidates over
-frozen development and held-out packages, then persists accepted results to an
-isolated database on a child branch of the existing Neon project and demonstrates
-actual SQL reads. It preserves raw evidence, immutable interpretations,
-per-experiment/per-arm acceptance, scoped prices, and observation history. The
-[plan's requirements-to-checks table](plan.md#requirements-to-checks) connects
-these outcomes to concrete evidence required from that exercise.
+Follow the [design correction](design.md) and [plan](plan.md): a small, varied
+source-to-entry-to-SQL path, followed by multi-entry inputs and rescrape behavior.
+The former paired-parser comparison does not define completion. The current
+prototype is not evidence that useful extraction has been established.
 
-Completion of that bounded exercise does not resolve all seven problems.
 Authored feed/auction fixtures and a derived CSV expose behavior without proving
 real coverage. Real multi-item sale-post and split-auction evidence, established
-observation-date semantics, and a verified non-Bright-Data collection route
-remain necessary before claiming the broader first delivery works. Richer
-categories, cost apportionment, routine collection, scale, and incorporation into
-the main project remain later work. No production, scheduler, frontend,
-consumer-agent framework, scoring, or cost-allocation system is included now.
+observation-date semantics, and a verified non-Bright-Data collection route remain
+coverage gaps. Preserve those gaps without building a general evaluation framework
+before the first useful extracted records exist.

@@ -1,50 +1,66 @@
-# Bounded parser comparison and queryable evidence
+# Build the ingestion path
 
-Status: implementation in progress, revised 2026-10-16 after the owner's instruction
-to start substantially smaller and retain reasoning. The first review gate is the
-two-record extraction below. The larger candidate comparison remains subsequent
-experimental work, not an established working parser.
+Revised 2026-10-16 to address the design before further PR-review work.
+[The design correction](design.md) defines the next implementation target.
+The current prototype has not demonstrated useful extraction; passing its local
+checks does not complete this plan.
 
-Read [the required outcomes](problems.md) and [the data contract](data-contract.md)
-first. Other agents consume documented SQL facts and relationships. The parser
-agents described here interpret captured evidence; they are distinct from those
-consumer agents. This exercise implements a bounded comparison of two parser
-candidates and actual PostgreSQL storage. It does not solve every broader
-TechDeals problem or establish production readiness.
+## Goal
 
-## First gate: two small records, one extraction
+Store scraped items, all stated prices, location, seller, condition,
+availability, specifications and dates as useful database records for other
+agents. Preserve native inputs, multiple entries in one source, date meanings,
+and repeat-scrape history. Use one shared LLM-backed extraction path rather than
+a handwritten semantic parser for each source.
 
-Start with package `small-a`: one complete native ServerPartDeals product object
-(2,494 bytes) and one complete DiscTech product card plus its corresponding native
-JSON-LD Product (9,090 bytes). They retain their parent source hashes, explicit
-selection rules, and unknown acquisition times. Their independent expectations
-are evaluator-only.
+## Implementation sequence
 
-Send both complete records together in one typed extraction request. Bypass
-layout discovery and inspection-tool loops. Persist raw captures first; validate
-the result, write valid units to Neon, and inspect every output field, original
-price, source-date meaning, and SQL round trip against these two inputs. Keep
-unknown seller/location/date facts unknown rather than filling them for appearance.
+1. **Replace the model-facing graph contract with entries and named fields.**
+   Define the actual extraction schema from the field table in design.md.
+   Keep prices under the entry they describe and native source dates separately
+   named. Move database IDs, capture metadata and processing dispositions out of
+   model output. Keep nullable values and flexible source attributes.
+2. **Build one direct PydanticAI extraction path.**
+   Supply complete native inputs and collection context in a small varied batch.
+   Use typed output, a bounded framework-managed correction, and inspectable
+   messages. Keep the configured model free and reasoning enabled; supply secrets
+   through Doppler. Discovery and inspection tools are not part of this first path.
+3. **Persist and inspect the result.**
+   Retain raw input first. Store entry fields, exact numeric prices, native
+   attributes and source dates in the existing isolated Neon development target.
+   Assign application IDs and attach trusted collection timestamps in code.
+   Keep unknown retrieval times unknown. Verify actual SELECT results against
+   each source field, including missing information and qualifications.
+4. **Prove the structural cases.**
+   First use the two native inputs already selected as small-a; then a real
+   multi-entry source. Verify that one input can yield several correctly priced
+   entries and that a bundle price stays with the bundle. Use known linked
+   responses together when available; retain the existing real-source gaps.
+5. **Prove repeat ingestion.**
+   Reimport the same capture, ingest an unchanged later scrape, then a changed
+   price. Verify idempotence, freshness, preserved observation dates and history,
+   with no duplicate entries in ordinary queries. Match through established
+   native identity; leave unsupported matches unresolved.
+6. **Review the delivered behavior, then consider incorporation.**
+   Show native input, extracted entries and stored rows together. State every
+   remaining failure. Only demonstrated behavior should inform a reviewed change
+   to the main TechDeals project; production incorporation remains separate.
 
-Use `run --package small-a --arm staged --direct`. Inspect the transcript before
-expanding. A schema correction is visible and counted; failed output stays failed.
-Only after this small path produces useful, inspected records should the larger
-A/B development packages or held-back comparison run. The existing experimental
-candidate implementations do not constitute proof of that broader behavior.
+## Completion of the next slice
 
-This gate remains incomplete. The executable now uses named, typed core fields
-and PydanticAI's output-validator correction flow in one conversation. Initial
-model output failed price-scope validation; a later call with the revised schema
-failed at the provider before output. No useful two-record SQL result has yet
-passed source inspection. Keep model availability and semantic acceptance as
-separate checks, and do not expand merely because offline checks pass.
+The initial extraction checkpoint is useful, inspected entries and prices in
+Neon with correct source/date context. Completion of the ingestion slice also
+requires the multi-entry and repeat-ingestion demonstrations in steps 4 and 5:
+same-capture idempotence, unchanged-scrape freshness, and dated price changes.
+Source-to-output-to-SQL inspection is the acceptance evidence. A provider response,
+schema pass, green CI result, or completed PR-review queue is insufficient on its own.
 
-The earlier development attempts exposed two concrete failures: full-body layout
-discovery exhausted 600 seconds before extraction, and serial root paging exhausted
-twelve tool requests before final output. Their retained transcripts are evidence
-for revising the execution design, not successful ingestion examples.
+Preserve unknown currency and seller where the source does not establish them.
+Retain stock qualifications and distinguish vendor from seller, publication from
+retrieval, supported hardware from included hardware, and purchase controls from
+available stock. Report source truncation without completing its text.
 
-## Shared implementation boundary
+## Existing evidence and implementation
 
 Other agents query the database and use the information in their own tasks.
 The first delivery is an ingestion pipeline and queryable database with
@@ -59,16 +75,10 @@ fields that need it. Incomplete interpretation does not block basic intake.
 The owner's personal use of a query command or buying interface is not a
 requirement.
 
-Commit model `nvidia/nemotron-3.5-lightning:free` and the OpenRouter endpoint
-`https://openrouter.ai/api/v1` in configuration. There is no alternative model or
-endpoint fallback. Reasoning is explicitly enabled; do not disable it as a latency
-shortcut. Lightning's free route supports tools but does not advertise native
-`response_format`/`structured_outputs`. The harness uses PydanticAI `ToolOutput`
-and validates returned arguments locally, rather than claiming provider-enforced
-JSON Schema. The actual small call must establish availability and suitability.
-Credentials and connection details come from Doppler-injected
-process environment; the application must not load `.env` files. Secrets never
-belong in committed captures, prompts, logs, or reports.
+The former two-arm comparison plan is retained in
+[the previous committed plan](https://github.com/MooseGooseConsulting/techdeals-ingestion-spike/blob/99a41ea18b9f3837cf09d8d136d3de5223f48cec/docs/plan.md).
+Its discovery/tool protocols and paired benchmark are no longer the immediate
+implementation goal. Frozen corpus files and their provenance are unchanged.
 
 First probe this exact model through the intended harness for structured output
 on multiple inputs and for tool calls followed by the typed final result. Save
