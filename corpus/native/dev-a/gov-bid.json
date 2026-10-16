@@ -1,0 +1,14 @@
+{
+  "accountId": 30467,
+  "assetId": 94,
+  "auctionId": 1,
+  "assetStatusCd": "STA",
+  "assetAuctionEndDateUTC": "2026-10-08T19:00:00Z",
+  "currentBid": 7360.0,
+  "bidCount": 1,
+  "watcherCount": 17,
+  "premiumPercent": 12.5,
+  "hasReservePrice": false,
+  "isReserveNotMet": false,
+  "all_in_estimate_usd": 8280.0
+}

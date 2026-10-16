@@ -1,0 +1,576 @@
+{
+ "products": [
+  {
+   "id": 8297455845654,
+   "title": "2.5\" U.2 NVMe to PCIe Adapter Card",
+   "handle": "u-2-nvme-to-pcie-adapter-card",
+   "body_html": "<ul>\n<li>Used to convert one 2.5\" U.2 NVMe drive to PCIe for compatibility in any system with an available PCIe X4 port</li>\n<li>Power and SATA cables not necessary, power and data connection comes fr",
+   "published_at": "2025-05-28T15:07:05-04:00",
+   "created_at": "2023-06-02T14:45:03-04:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "ServerPartDeals",
+   "product_type": "Adapter Cards",
+   "tags": [
+    "capacity:1x U.2 Drive",
+    "formFactor:Full Height PCIe",
+    "interface:PCIe Gen 3.0 x4",
+    "stockstatus:In stock",
+    "type:Adapter Card"
+   ],
+   "variants": [
+    {
+     "id": 44864662864150,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "U2AIC_NB",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "14.99",
+     "grams": 227,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 8297455845654,
+     "created_at": "2023-06-02T14:45:03-04:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 43563814289686,
+     "created_at": "2024-02-08T13:26:16-05:00",
+     "position": 1,
+     "updated_at": "2025-06-22T22:18:49-04:00",
+     "product_id": 8297455845654,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWfront.png?v=1750645129",
+     "width": 2000,
+     "height": 2000
+    },
+    {
+     "id": 43563814551830,
+     "created_at": "2024-02-08T13:26:16-05:00",
+     "position": 2,
+     "updated_at": "2025-06-24T11:43:19-04:00",
+     "product_id": 8297455845654,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl.png?v=1750779799",
+     "width": 2000,
+     "height": 2000
+    },
+    {
+     "id": 43563814125846,
+     "created_at": "2024-02-08T13:26:16-05:00",
+     "position": 3,
+     "updated_at": "2025-06-24T12:08:27-04:00",
+     "product_id": 8297455845654,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/U2AIC-NEWallincl4.png?v=1750781307",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10396292645142,
+   "title": "256GB 8Rx4 DDR4 2933MHz RDIMM ECC Server RAM PC4-23400R Seller Refurbished Memory",
+   "handle": "256gb-8rx4-ddr4-2933mhz-rdimm-ecc-server-ram-pc4-23400r-seller-refurbished-memory",
+   "body_html": "<hr><!-- more -->\n<details open=\"\">\n<summary><span class=\"headline\">Specifications</span></summary>\n<div class=\"indent-content\">\n<div id=\"specifications\">\n<div class=\"option-values\">\n<table style=\"wid",
+   "published_at": "2026-01-28T15:43:12-05:00",
+   "created_at": "2026-01-28T15:43:12-05:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "Unbranded",
+   "product_type": "RAM",
+   "tags": [
+    "000CardTitle:Seller Refurbished 256GB DDR4 3200MHz RDIMM RAM",
+    "brand:Unbranded",
+    "capacity:256GB",
+    "condition:Seller Refurbished",
+    "formFactor:288-Pin RDIMM",
+    "interface:DDR4",
+    "Speed:2933Mhz",
+    "type:RAM",
+    "warranty:1 Year Seller"
+   ],
+   "variants": [
+    {
+     "id": 50995205832982,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "WL-256GB-PC4-23400R_SR",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "899.00",
+     "grams": 91,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 10396292645142,
+     "created_at": "2026-01-28T15:43:13-05:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 54217794552086,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 1,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530493.jpg?v=1770994392",
+     "width": 4590,
+     "height": 4590
+    },
+    {
+     "id": 54217794584854,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 2,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530494.jpg?v=1770994392",
+     "width": 4644,
+     "height": 4644
+    },
+    {
+     "id": 54217794617622,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 3,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530495.jpg?v=1770994392",
+     "width": 4536,
+     "height": 4536
+    },
+    {
+     "id": 54217794650390,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 4,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530558.jpg?v=1770994392",
+     "width": 2148,
+     "height": 2148
+    },
+    {
+     "id": 54217794683158,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 5,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530559.jpg?v=1770994392",
+     "width": 2208,
+     "height": 2208
+    },
+    {
+     "id": 54217794715926,
+     "created_at": "2026-01-28T15:46:53-05:00",
+     "position": 6,
+     "updated_at": "2026-02-13T09:53:12-05:00",
+     "product_id": 10396292645142,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530560.jpg?v=1770994392",
+     "width": 2304,
+     "height": 2304
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10420308803862,
+   "title": "256GB 8Rx4 DDR4 3200MHz RDIMM ECC Server RAM PC4-25600L Seller Refurbished Memory",
+   "handle": "256gb-ddr4-3200mhz-rdimm-ecc-server-ram-pc4-25600l-seller-refurbished-memory",
+   "body_html": "<hr><!-- more -->\n<details open=\"\">\n<summary><span class=\"headline\">Specifications</span></summary>\n<div class=\"indent-content\">\n<div id=\"specifications\">\n<div class=\"option-values\">\n<table class=\"met",
+   "published_at": "2026-02-24T13:39:33-05:00",
+   "created_at": "2026-02-24T13:36:59-05:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "Unbranded",
+   "product_type": "RAM",
+   "tags": [
+    "000CardTitle:Seller Refurbished 128GB DDR4 3200MHz RDIMM RAM",
+    "brand:Unbranded",
+    "capacity:256GB",
+    "condition:Seller Refurbished",
+    "formFactor:288-Pin RDIMM",
+    "interface:DDR4",
+    "speed:3200Mhz",
+    "type:RAM",
+    "warranty:1 Year Seller"
+   ],
+   "variants": [
+    {
+     "id": 51056571875606,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "WL-256GB-PC4-25600L_SR",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "899.00",
+     "grams": 91,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 10420308803862,
+     "created_at": "2026-02-24T13:36:59-05:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 55313761665302,
+     "created_at": "2026-05-01T13:42:39-04:00",
+     "position": 1,
+     "updated_at": "2026-05-01T13:42:44-04:00",
+     "product_id": 10420308803862,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1574614.png?v=1777657364",
+     "width": 2000,
+     "height": 2000
+    },
+    {
+     "id": 55313761698070,
+     "created_at": "2026-05-01T13:42:39-04:00",
+     "position": 2,
+     "updated_at": "2026-05-01T13:42:41-04:00",
+     "product_id": 10420308803862,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1574615.png?v=1777657361",
+     "width": 2000,
+     "height": 2000
+    },
+    {
+     "id": 55313761632534,
+     "created_at": "2026-05-01T13:42:39-04:00",
+     "position": 3,
+     "updated_at": "2026-05-01T13:42:41-04:00",
+     "product_id": 10420308803862,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1574619.png?v=1777657361",
+     "width": 2000,
+     "height": 2000
+    },
+    {
+     "id": 55313761730838,
+     "created_at": "2026-05-01T13:42:39-04:00",
+     "position": 4,
+     "updated_at": "2026-05-01T13:42:42-04:00",
+     "product_id": 10420308803862,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1574618.png?v=1777657362",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10396284158230,
+   "title": "256GB DDR4 3200MHz 2S8Rx4 RDIMM ECC Server RAM PC4-25600R Seller Refurbished Memory",
+   "handle": "white-label-256gb-ddr4-3200mhz-rdimm-ecc-server-ram-pc4-25600r-seller-refurbished-memory",
+   "body_html": "<hr><!-- more -->\n<details>\n<summary><span class=\"headline\">Specifications</span></summary>\n<div class=\"indent-content\">\n<div id=\"specifications\">\n<div class=\"option-values\">\n<table style=\"width: 100%",
+   "published_at": "2026-01-28T15:34:28-05:00",
+   "created_at": "2026-01-28T15:19:31-05:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "Unbranded",
+   "product_type": "RAM",
+   "tags": [
+    "000CardTitle:Seller Refurbished 128GB DDR4 3200MHz RDIMM RAM",
+    "brand:Unbranded",
+    "capacity:256GB",
+    "condition:Seller Refurbished",
+    "formFactor:288-Pin RDIMM",
+    "interface:DDR4",
+    "speed:3200Mhz",
+    "type:RAM",
+    "warranty:1 Year Seller"
+   ],
+   "variants": [
+    {
+     "id": 50995183419670,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "WL-256GB-PC4-25600R_SR",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "899.00",
+     "grams": 91,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 10396284158230,
+     "created_at": "2026-01-28T15:19:31-05:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 54217545548054,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 1,
+     "updated_at": "2026-01-28T15:20:38-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530486.jpg?v=1769631638",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217555575062,
+     "created_at": "2026-01-28T15:21:40-05:00",
+     "position": 2,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1541382.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217545580822,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 3,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530487.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217545613590,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 4,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530488.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217545646358,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 5,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530562.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217545679126,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 6,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530564.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    },
+    {
+     "id": 54217545711894,
+     "created_at": "2026-01-28T15:20:36-05:00",
+     "position": 7,
+     "updated_at": "2026-01-28T15:33:24-05:00",
+     "product_id": 10396284158230,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/P1530565.jpg?v=1769632404",
+     "width": 3888,
+     "height": 3888
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10519680418070,
+   "title": "Adata Ultimate SU800 ASU800SS 512GB 400 TBW SATA 6Gb/s 3D TLC 2.5in Recertified SSD",
+   "handle": "adata-ultimate-su800-asu800ss-512gb-400-tbw-sata-6gb-s-3d-tlc-2-5-recertified-ssd",
+   "body_html": "<hr><!-- more --> <details> <summary><span class=\"headline\">Specifications</span></summary> <table width=\"100%\"> <tbody> <tr>\n<td>Brand</td>\n<td>Adata</td>\n</tr> <tr>\n<td>Series</td>\n<td>Ultimate SU80",
+   "published_at": "2026-05-08T13:09:29-04:00",
+   "created_at": "2026-05-08T13:09:29-04:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "Adata",
+   "product_type": "Solid State Drives > 512GB > 2.5 > SATA",
+   "tags": [
+    "000CardTitle: Ultimate SU800 512GB SATA SSD ASU800SS",
+    "brand:Adata",
+    "capacity:512GB",
+    "capacityGroup:300GB to 2.4TB",
+    "condition:Manufacturer Recertified",
+    "formFactor:2.5",
+    "highCapacity:N",
+    "interface:SATA",
+    "interfaceSpeed:6Gb/s",
+    "series:Ultimate SU800",
+    "skuCondition:",
+    "spindleSpeed:",
+    "type:Solid State Drives",
+    "warranty:3 Year Seller"
+   ],
+   "variants": [
+    {
+     "id": 51298763505942,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "ASU800SS_MR",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "2999.00",
+     "grams": 227,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 10519680418070,
+     "created_at": "2026-05-08T13:09:29-04:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 52810510729494,
+     "created_at": "2025-11-06T14:13:46-05:00",
+     "position": 1,
+     "updated_at": "2025-11-06T14:13:48-05:00",
+     "product_id": 10519680418070,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/generic_blank_SAS_SSD_8ebb12ba-0c6f-438a-acf4-8ca22beffea9.jpg?v=1762456428",
+     "width": 2048,
+     "height": 2048
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10519680385302,
+   "title": "Adata Ultimate SU800 ASU800SS 512GB 400 TBW SATA 6Gb/s 3D TLC 2.5in SSD",
+   "handle": "adata-ultimate-su800-asu800ss-512gb-400-tbw-sata-6gb-s-3d-tlc-2-5-ssd",
+   "body_html": "<hr><!-- more --> <details> <summary><span class=\"headline\">Specifications</span></summary> <table width=\"100%\"> <tbody> <tr>\n<td>Brand</td>\n<td>Adata</td>\n</tr> <tr>\n<td>Series</td>\n<td>Ultimate SU80",
+   "published_at": "2026-05-08T13:09:25-04:00",
+   "created_at": "2026-05-08T13:09:25-04:00",
+   "updated_at": "2026-09-24T07:49:45-04:00",
+   "vendor": "Adata",
+   "product_type": "Solid State Drives > 512GB > 2.5 > SATA",
+   "tags": [
+    "000CardTitle:New Ultimate SU800 512GB SATA SSD ASU800SS",
+    "brand:Adata",
+    "capacity:512GB",
+    "capacityGroup:300GB to 2.4TB",
+    "condition:New",
+    "formFactor:2.5",
+    "highCapacity:N",
+    "interface:SATA",
+    "interfaceSpeed:6Gb/s",
+    "series:Ultimate SU800",
+    "skuCondition:NB",
+    "spindleSpeed:",
+    "type:Solid State Drives",
+    "warranty:3 Year Seller"
+   ],
+   "variants": [
+    {
+     "id": 51298763473174,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "ASU800SS_NB",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "2999.00",
+     "grams": 227,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 10519680385302,
+     "created_at": "2026-05-08T13:09:26-04:00",
+     "updated_at": "2026-09-24T07:49:45-04:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 52810510729494,
+     "created_at": "2025-11-06T14:13:46-05:00",
+     "position": 1,
+     "updated_at": "2025-11-06T14:13:48-05:00",
+     "product_id": 10519680385302,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0011/8675/8756/files/generic_blank_SAS_SSD_8ebb12ba-0c6f-438a-acf4-8ca22beffea9.jpg?v=1762456428",
+     "width": 2048,
+     "height": 2048
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  }
+ ]
+}

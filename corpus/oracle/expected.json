@@ -1,0 +1,988 @@
+{
+  "version": 1,
+  "purpose": "Evaluator-only independent source inspection; NEVER model input or expected parser serialization",
+  "method": "Native source fields read directly; contextual meanings reviewed independently before parser implementation. Assertions are semantic requirements, not parser-generated golden output.",
+  "global_requirements": [
+    "Every input occurrence retained or explicitly disposed",
+    "No trusted retrieval date from unverified timestamps",
+    "No currency inferred solely from dollar sign",
+    "No supported specification represented as installed",
+    "No duplicate offer for repeated representations or root variation record"
+  ],
+  "cases": {
+    "ebay-bundle": {
+      "offers": [
+        {
+          "native_id": "127932828201",
+          "amount": "1640.00",
+          "currency": "USD",
+          "scope": "one motherboard and CPU bundle",
+          "components": [
+            {
+              "model": "AMD EPYC 7552",
+              "quantity": 1,
+              "cores": 48
+            },
+            {
+              "model": "Supermicro H12SSL-i",
+              "quantity": 1
+            }
+          ],
+          "available_count": 10
+        }
+      ],
+      "forbidden": [
+        "10 CPUs per bundle",
+        "64 installed CPU cores",
+        "2TB installed memory",
+        "separate CPU or board seller ask"
+      ],
+      "unknowns": [
+        "installed memory capacity",
+        "trusted retrieval time"
+      ],
+      "source_dates": [
+        {
+          "field": "timestamp",
+          "value": "2026-10-06T02:22:34.880Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "field": "availability_date",
+          "meaning": "delivery estimate"
+        }
+      ]
+    },
+    "spd": {
+      "offers": [
+        {
+          "native_id": "8297455845654",
+          "variant_id": "44864662864150",
+          "title": "2.5\" U.2 NVMe to PCIe Adapter Card",
+          "amount": "14.99",
+          "currency": null,
+          "available": true,
+          "locator": "products[id=8297455845654].variants[0]",
+          "source_dates": {
+            "published_at": "2025-05-28T15:07:05-04:00",
+            "created_at": "2023-06-02T14:45:03-04:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        },
+        {
+          "native_id": "10396292645142",
+          "variant_id": "50995205832982",
+          "title": "256GB 8Rx4 DDR4 2933MHz RDIMM ECC Server RAM PC4-23400R Seller Refurbished Memory",
+          "amount": "899.00",
+          "currency": null,
+          "available": false,
+          "locator": "products[id=10396292645142].variants[0]",
+          "source_dates": {
+            "published_at": "2026-01-28T15:43:12-05:00",
+            "created_at": "2026-01-28T15:43:12-05:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        },
+        {
+          "native_id": "10420308803862",
+          "variant_id": "51056571875606",
+          "title": "256GB 8Rx4 DDR4 3200MHz RDIMM ECC Server RAM PC4-25600L Seller Refurbished Memory",
+          "amount": "899.00",
+          "currency": null,
+          "available": false,
+          "locator": "products[id=10420308803862].variants[0]",
+          "source_dates": {
+            "published_at": "2026-02-24T13:39:33-05:00",
+            "created_at": "2026-02-24T13:36:59-05:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        },
+        {
+          "native_id": "10396284158230",
+          "variant_id": "50995183419670",
+          "title": "256GB DDR4 3200MHz 2S8Rx4 RDIMM ECC Server RAM PC4-25600R Seller Refurbished Memory",
+          "amount": "899.00",
+          "currency": null,
+          "available": true,
+          "locator": "products[id=10396284158230].variants[0]",
+          "source_dates": {
+            "published_at": "2026-01-28T15:34:28-05:00",
+            "created_at": "2026-01-28T15:19:31-05:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        },
+        {
+          "native_id": "10519680418070",
+          "variant_id": "51298763505942",
+          "title": "Adata Ultimate SU800 ASU800SS 512GB 400 TBW SATA 6Gb/s 3D TLC 2.5in Recertified SSD",
+          "amount": "2999.00",
+          "currency": null,
+          "available": false,
+          "locator": "products[id=10519680418070].variants[0]",
+          "source_dates": {
+            "published_at": "2026-05-08T13:09:29-04:00",
+            "created_at": "2026-05-08T13:09:29-04:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        },
+        {
+          "native_id": "10519680385302",
+          "variant_id": "51298763473174",
+          "title": "Adata Ultimate SU800 ASU800SS 512GB 400 TBW SATA 6Gb/s 3D TLC 2.5in SSD",
+          "amount": "2999.00",
+          "currency": null,
+          "available": false,
+          "locator": "products[id=10519680385302].variants[0]",
+          "source_dates": {
+            "published_at": "2026-05-08T13:09:25-04:00",
+            "created_at": "2026-05-08T13:09:25-04:00",
+            "updated_at": "2026-09-24T07:49:45-04:00"
+          }
+        }
+      ],
+      "expected_offer_count": 6,
+      "max_variants_per_product": 1,
+      "conflicts": [
+        {
+          "native_id": "10396292645142",
+          "field": "memory speed",
+          "claims": [
+            "title/Speed tag 2933MHz",
+            "CardTitle tag 3200MHz"
+          ]
+        },
+        {
+          "native_ids": [
+            "10420308803862",
+            "10396284158230"
+          ],
+          "field": "capacity",
+          "claims": [
+            "title/capacity tag 256GB",
+            "CardTitle tag 128GB"
+          ]
+        }
+      ],
+      "unknowns": [
+        "currency",
+        "trusted retrieval time"
+      ],
+      "forbidden": [
+        "claim true multi-variant coverage"
+      ]
+    },
+    "ebay:397978307775": {
+      "capture_ids": [
+        "archive-1",
+        "archive-8",
+        "archive-10",
+        "archive-16"
+      ],
+      "expected_offer_count": 3,
+      "offers": [
+        {
+          "native_id": "397978307775",
+          "variant_id": "666281923651",
+          "memory": "256 GB",
+          "amount": "3900",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        },
+        {
+          "native_id": "397978307775",
+          "variant_id": "666281923652",
+          "memory": "512 GB",
+          "amount": "6100",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        },
+        {
+          "native_id": "397978307775",
+          "variant_id": "666281923653",
+          "memory": "1 TB",
+          "amount": "9900",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        }
+      ],
+      "forbidden": [
+        "root record becomes fourth separately purchasable option",
+        "sum option prices as one purchase"
+      ],
+      "source_dates": [
+        {
+          "capture_id": "archive-1",
+          "value": "2026-09-14T01:14:31.514Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-8",
+          "value": "2026-09-14T01:15:02.343Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-10",
+          "value": "2026-09-14T01:15:16.158Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-16",
+          "value": "2026-09-14T01:15:37.468Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        }
+      ],
+      "unknowns": [
+        "trusted retrieval time"
+      ]
+    },
+    "ebay:127252729784": {
+      "capture_ids": [
+        "archive-6",
+        "archive-14",
+        "archive-17",
+        "archive-18"
+      ],
+      "expected_offer_count": 3,
+      "offers": [
+        {
+          "native_id": "127252729784",
+          "variant_id": "428356678312",
+          "memory": "256 GB",
+          "amount": "5599",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        },
+        {
+          "native_id": "127252729784",
+          "variant_id": "428356678313",
+          "memory": "512 GB",
+          "amount": "8040",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        },
+        {
+          "native_id": "127252729784",
+          "variant_id": "428356678314",
+          "memory": "1 TB",
+          "amount": "11299",
+          "currency": "USD",
+          "scope": "complete server configuration",
+          "cpu_quantity": 2
+        }
+      ],
+      "forbidden": [
+        "root record becomes fourth separately purchasable option",
+        "sum option prices as one purchase"
+      ],
+      "source_dates": [
+        {
+          "capture_id": "archive-6",
+          "value": "2026-09-14T01:14:59.315Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-14",
+          "value": "2026-09-14T01:15:26.590Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-17",
+          "value": "2026-09-14T01:15:56.025Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        },
+        {
+          "capture_id": "archive-18",
+          "value": "2026-09-14T01:16:00.764Z",
+          "meaning": "provider timestamp, precise meaning unverified"
+        }
+      ],
+      "unknowns": [
+        "trusted retrieval time"
+      ]
+    },
+    "govdeals:30467:94:1": {
+      "capture_ids": [
+        "gov-asset",
+        "gov-bid"
+      ],
+      "expected_offer_count": 1,
+      "offers": [
+        {
+          "native_id": "30467:94:1",
+          "amount": "7360.00",
+          "currency": "USD",
+          "kind": "current_bid",
+          "scope": "lot of 64 memory modules",
+          "components": [
+            {
+              "quantity": 64,
+              "capacity_gb_each": 32
+            }
+          ],
+          "shipping_available": false
+        }
+      ],
+      "derived_claims": [
+        {
+          "amount": "8280.00",
+          "kind": "all_in_estimate_usd",
+          "formula": "7360 * (1 + 12.5 / 100)",
+          "limitation": "not guaranteed final total; taxes and fees may differ"
+        }
+      ],
+      "source_dates": [
+        {
+          "field": "assetAuctionEndDateUTC",
+          "value": "2026-10-08T19:00:00Z",
+          "meaning": "auction end"
+        }
+      ],
+      "unknowns": [
+        "trusted retrieval time",
+        "final total"
+      ],
+      "forbidden": [
+        "bid and asset become separate offers",
+        "auction end treated as observation time"
+      ]
+    },
+    "hls": {
+      "entry_occurrences": 3,
+      "offers": [
+        {
+          "native_id": "t3_abc123",
+          "item": "Seagate Exos 8TB SATA HDD",
+          "quantity": 4,
+          "amount": "280",
+          "price_scope": "unresolved whether lot or each"
+        },
+        {
+          "native_id": "t3_abc123",
+          "item": "Samsung 980 Pro 2TB NVMe SSD",
+          "amount": "110"
+        },
+        {
+          "native_id": "t3_def456",
+          "item": "WD Gold 20TB SATA",
+          "quantity": 2,
+          "amount": "150",
+          "price_scope": "each"
+        },
+        {
+          "native_id": "t3_def456",
+          "item": "HGST 12TB SAS HDD",
+          "quantity": 6,
+          "amount": "360",
+          "price_scope": "unresolved whether lot or each"
+        }
+      ],
+      "dispositions": [
+        {
+          "native_id": "t3_wanted1",
+          "kind": "wanted",
+          "amount": "100",
+          "price_scope": "buyer budget each, not seller offer"
+        }
+      ],
+      "source_dates": {
+        "field": "updated",
+        "meaning": "feed entry update, not retrieval"
+      },
+      "unknowns": [
+        "currency",
+        "ambiguous lot prices",
+        "trusted retrieval time"
+      ]
+    },
+    "hws": {
+      "entry_occurrences": 5,
+      "distinct_entry_ids": 4,
+      "offers": [
+        {
+          "native_id": "t3_hwssale1",
+          "item": "RTX 3090 FE 24GB",
+          "amount": "575",
+          "scope": "one GPU",
+          "duplicate_occurrences": 2
+        },
+        {
+          "native_id": "t3_hwsamb1",
+          "amount": "700",
+          "scope": "bundle of RTX 3090 FE plus Ryzen 5800X3D",
+          "components": [
+            {
+              "model": "RTX 3090 FE",
+              "quantity": 1
+            },
+            {
+              "model": "5800X3D",
+              "quantity": 1
+            }
+          ]
+        }
+      ],
+      "dispositions": [
+        {
+          "native_id": "t3_hwswtb1",
+          "kind": "wanted",
+          "amount": "600",
+          "scope": "budget around, not asking price"
+        },
+        {
+          "native_id": "t3_hwstrade1",
+          "kind": "trade",
+          "cash_price": null
+        }
+      ],
+      "unknowns": [
+        "currency",
+        "trusted retrieval time"
+      ],
+      "source_dates": {
+        "field": "updated",
+        "meaning": "entry update"
+      }
+    },
+    "ssd-export": {
+      "expected_rows": 10,
+      "rows": [
+        {
+          "obs_id": "192",
+          "claims": {
+            "obs_id": "192",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "eBay - fanxiang-official-store",
+            "brand": "Fanxiang",
+            "model_name": "Fanxiang Ssd 1tb M.2 Nvme 2tb 4tb Internal Solid State Hard Drive Game",
+            "interface": "PCIe 4.0",
+            "capacity_gb": "4000",
+            "price_usd": "39.99",
+            "cents_per_gb": "1.0",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "206",
+          "claims": {
+            "obs_id": "206",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "eBay - fanxiang-online-store",
+            "brand": "Fanxiang",
+            "model_name": "Fanxiang Nvme M.2 Ssd 512gb 1tb 2tb 4tb Pcie Gen3 Internal Solid State",
+            "interface": "PCIe 3.0",
+            "capacity_gb": "4000",
+            "price_usd": "47.92",
+            "cents_per_gb": "1.2",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "196",
+          "claims": {
+            "obs_id": "196",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "eBay - fanxiang-online-store",
+            "brand": "Fanxiang",
+            "model_name": "Fanxiang 1tb Ssd M.2 2280 2tb 512gb Pcie Gen 3.0 Nvme 3d Solid State",
+            "interface": "PCIe 3.0",
+            "capacity_gb": "2000",
+            "price_usd": "36.79",
+            "cents_per_gb": "1.84",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "194",
+          "claims": {
+            "obs_id": "194",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "eBay - netac-official-store",
+            "brand": "Netac",
+            "model_name": "Netac Ssd 500gb 1tb 2tb Pcie Nvme Gen3x4 M.2 Solid State Drive",
+            "interface": "PCIe 3.0",
+            "capacity_gb": "2000",
+            "price_usd": "39.99",
+            "cents_per_gb": "2.0",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "145",
+          "claims": {
+            "obs_id": "145",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "Mobilpcservis.sk",
+            "brand": "Solid Apollo",
+            "model_name": "1 Tb Ssd HIRVOD 1TB SSD Internal SATA III: Blazing Fast 570MB/s Read Speed Upgrade Ssd Hard Disk",
+            "interface": "SATA III",
+            "capacity_gb": "1000",
+            "price_usd": "25.0",
+            "cents_per_gb": "2.5",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "179",
+          "claims": {
+            "obs_id": "179",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "Walmart - lianchenshangmao",
+            "brand": "Unknown",
+            "model_name": "2tb Magnetic Mini Portable Ssd for iPhone 15/16 Pro/Pro Max",
+            "interface": "USB 3.2",
+            "capacity_gb": "2000",
+            "price_usd": "52.99",
+            "cents_per_gb": "2.65",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "160",
+          "claims": {
+            "obs_id": "160",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "ravir film",
+            "brand": "Unknown",
+            "model_name": "Timetec 1TB SSD 3D NAND SATA III 6Gb/s M.2 2280 NGFF 512TBW Read Speed Up to 550MB/s SLC Cache Performance Boost Internal Solid State Drive for PC",
+            "interface": "SATA III",
+            "capacity_gb": "2000",
+            "price_usd": "57.2",
+            "cents_per_gb": "2.86",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "156",
+          "claims": {
+            "obs_id": "156",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "Newegg.com - Fanxiang Official Store",
+            "brand": "Fanxiang",
+            "model_name": "fanxiang 4TB SATA 2.5'' 6Gb/s 3D NAND QLC Internal Solid State Drive",
+            "interface": "SATA III",
+            "capacity_gb": "4000",
+            "price_usd": "129.99",
+            "cents_per_gb": "3.25",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "146",
+          "claims": {
+            "obs_id": "146",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "Tuesday Morning",
+            "brand": "Unknown",
+            "model_name": "2TB External SSD",
+            "interface": "USB 3.2",
+            "capacity_gb": "2000",
+            "price_usd": "70.95",
+            "cents_per_gb": "3.55",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        },
+        {
+          "obs_id": "209",
+          "claims": {
+            "obs_id": "209",
+            "scraped_at": "2026-07-31T10:05:33.729223+00:00",
+            "retailer": "eBay - fik-8981",
+            "brand": "Unknown",
+            "model_name": "Fikwot M.2 NVMe SSD 1TB 2TB PCIe 4.0 Gen4 Internal SSD Hard Drive For PS5 Laptop | Mac Compatible | RoHS Compliant | 5000MB/s Read Speed",
+            "interface": "PCIe 4.0",
+            "capacity_gb": "2000",
+            "price_usd": "71.98",
+            "cents_per_gb": "3.6",
+            "condition": "new",
+            "source_url": "https://shopping.google.com"
+          },
+          "claim_status": "derived export, not independently verified listing truth"
+        }
+      ],
+      "conflicts": [
+        {
+          "obs_id": "192",
+          "meaning": "39.99 and 4000GB are normalized export claims; title lists multiple capacities so 4TB-price association is unresolved"
+        },
+        {
+          "obs_id": "160",
+          "meaning": "title says 1TB, exported capacity_gb says 2000"
+        }
+      ],
+      "source_dates": {
+        "field": "scraped_at",
+        "meaning": "exported scrape-time claim, not confirmed acquisition metadata"
+      },
+      "forbidden": [
+        "assert first row is confirmed 4TB for USD39.99"
+      ]
+    },
+    "disctech": {
+      "expected_offer_count": 24,
+      "offers": [
+        {
+          "native_id": "DEL-345-BHSC-BN-OE",
+          "url": "https://www.disctech.com/Dell-345-BHSC-50VHM-960GB-2.5-SFF-12Gbps-512e-Read-Intensive-vSAS-Solid-State-Drive-SED-Kit-SSD-DXD9",
+          "title": "Dell 345-BHSC / 50VHM 960GB 2.5\" SFF 12Gbps 512e Read Intensive vSAS Solid State Drive SED Kit SSD DXD9H",
+          "amount": "799",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-345-BHSC-BN-OE"
+        },
+        {
+          "native_id": "DEL-345-BFVG-BN-OE",
+          "url": "https://www.disctech.com/Dell-345-BFVG-MG7YN-1N0KG7.68TB-2.5inch-24Gbps-SAS-512e-ISE-Read-Intensive-Hot-Plug-SSD-Kit-DXD9H",
+          "title": "Dell 345-BFVG MG7YN 1N0KG 7.68TB 2.5inch 24Gbps SAS 512e ISE Read Intensive Hot-Plug SSD Kit DXD9H",
+          "amount": "5899",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-345-BFVG-BN-OE"
+        },
+        {
+          "native_id": "DEL-400-BMTU-BN-OE",
+          "url": "https://www.disctech.com/Dell-400-BMTU-WPJD0-0WPJD0-400GB-Write-Intensive-U.2-2.5inch-SFF-32Gbps-512e-NVMe-PCIe-4.0x4-P5800-K",
+          "title": "Dell 400-BMTU WPJD0 0WPJD0 400GB Write Intensive U.2 2.5inch SFF 32Gbps 512e NVMe PCIe 4.0x4 P5800 Kit 8FKXC",
+          "amount": "899",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-400-BMTU-BN-OE"
+        },
+        {
+          "native_id": "DEL-345-BFVY-BN-OE",
+          "url": "https://www.disctech.com/Dell-345-BFVY-3H34P-03H34P-7.68TB-2.5inch-24Gbps-SAS-512e-ISE-Read-Intensive-Hot-Hot-Pl",
+          "title": "Dell 345-BFVY 345-BEMP 3H34P 03H34P 7.68TB 2.5inch 24Gbps SAS 512e ISE Read Intensive Hot Hot-Plug SSD Kit 8FKXC",
+          "amount": "5899",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-345-BFVY-BN-OE"
+        },
+        {
+          "native_id": "SAM-MZ-1LB9600-BN-OE",
+          "url": "https://www.disctech.com/Samsung-PM983-MZ1LB960HAJQ-960GB-M.2-MLC-PCIe-NVMe-SSD",
+          "title": "Samsung PM983 MZ-1LB9600 / MZ1LB960HAJQ-00007 960GB M.2 22110 PCIe NVMe Gen3 Enterprise Solid State Drive SSD",
+          "amount": "319",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZ-1LB9600-BN-OE"
+        },
+        {
+          "native_id": "MIC-MTFDKCB3T8TFR-1BC1ZABYY-BN-OE",
+          "url": "https://www.disctech.com/Micron-7450-PRO-MTFDKCB3T8TFR-1BC1ZABYY-3.84TB-U.3-PCIe-4.0-NVMe-RI-2.5-7mm-TLC-SSD",
+          "title": "Micron 7450 PRO MTFDKCB3T8TFR-1BC1ZABYY 3.84TB U.3 PCIe 4.0 NVMe RI 2.5\" 7mm TLC SSD",
+          "amount": "1795",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=MIC-MTFDKCB3T8TFR-1BC1ZABYY-BN-OE"
+        },
+        {
+          "native_id": "MIC-MTFDDAK960TDS-1AW1ZABYY-BN-OE",
+          "url": "https://www.disctech.com/Micron-5300-PRO-MTFDDAK960TDS-1AW1ZABYY-960GB-2.5-Read-Intensive-Enterprise-SATA-SSD",
+          "title": "Micron 5300 PRO MTFDDAK960TDS-1AW1ZABYY /DB 960GB 2.5\" Read Intensive Enterprise SATA SSD",
+          "amount": "449",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=MIC-MTFDDAK960TDS-1AW1ZABYY-BN-OE"
+        },
+        {
+          "native_id": "MIC-MTFDDAK480TDT-1AW1ZABDB-BN-OE-DEG",
+          "url": "https://www.disctech.com/Micron-5300-MAX-Micron-MTFDDAK480TDT-1AW1ZABDB-Dell-KG2YN-480GB-2.5inch-6Gbps-Mixed-Use-SATA-SSD",
+          "title": "Micron 5300 MAX Micron MTFDDAK480TDT-1AW1ZABDB Dell KG2YN 480GB 2.5\" 6Gbps eTLC Mixed Use SATA Solid State Drive",
+          "amount": "359",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=MIC-MTFDDAK480TDT-1AW1ZABDB-BN-OE-DEG"
+        },
+        {
+          "native_id": "DEL-345-BCCS-C9-OE",
+          "url": "https://www.disctech.com/Dell-345-BCCS-7H8GG-960GB-SED-vSAS-Read-Intensive-SSD-2.5-inch-SFF-12Gbps-512e",
+          "title": "Dell 345-BCCS 7H8GG 960GB SED vSAS Read Intensive SSD 2.5 inch 12Gbps 512e",
+          "amount": "449",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-345-BCCS-C9-OE"
+        },
+        {
+          "native_id": "DEC-400-AHFE-BN-OE",
+          "url": "https://www.disctech.com/Dell-Compellent-400-AHFE-400GB-2.5-12Gbps-WI-SAS-Solid-State-Drive-Kit-7D4F6-Brand-New",
+          "title": "Dell Compellent 400-AHFE / 785G8 400GB 2.5\" 12Gbps WI SAS SSD",
+          "amount": "799",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEC-400-AHFE-BN-OE"
+        },
+        {
+          "native_id": "MIC-MTFDKCB7T6TFR-1BC1ZABYY-BN-OE",
+          "url": "https://www.disctech.com/Micron-7450-PRO-MTFDKCB7T6TFR-1BC1ZABYY-7.68TB-U.3-Read-Intensive-RI-PCIe-4.0-NVMe-2.5-7mm-TLC-SSD",
+          "title": "Micron 7450 PRO MTFDKCB7T6TFR-1BC1ZABYY 7.68TB U.3 Read Intensive RI PCIe 4.0 NVMe 2.5 7mm TLC SSD",
+          "amount": "2995",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=MIC-MTFDKCB7T6TFR-1BC1ZABYY-BN-OE"
+        },
+        {
+          "native_id": "SAM-MZ-QL29600-BN-OE",
+          "url": "https://www.disctech.com/Samsung-PM9A3-MZ-QL29600-MZQL2960HCJR-00A07-960GB-SED-PCIe-4.0x4-NVMe-U.2-2.5-RI-Enterprise-SSD",
+          "title": "Samsung PM9A3 MZ-QL29600 960GB U.2 PCIe 4.0 NVMe SED Read Intensive Enterprise SSD MZQL2960HCJR-00A07",
+          "amount": "799",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZ-QL29600-BN-OE"
+        },
+        {
+          "native_id": "SAM-MZ-1LT3T20-BN-OE-GEN",
+          "url": "https://www.disctech.com/Samsung-3.2TB-SAS-12Gbps-MU-SSD-2.5in-PM1645-MZ-1LT3T20-MZILT3T2HBLS",
+          "title": "Samsung 3.2TB SAS 12Gbps MU SSD 2.5in PM1645 MZ-1LT3T20 MZILT3T2HBLS",
+          "amount": "899",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZ-1LT3T20-BN-OE-GEN"
+        },
+        {
+          "native_id": "SAM-MZILT3T2HBLSAD3-BN-OE-DEL",
+          "url": "https://www.disctech.com/Dell-03YT5-Samsung-MZILT3T2HBLSAD3-PM1645a-3.2TB-12Gbps-SFF-MU-SAS-SSD",
+          "title": "Dell 03YT5 3.2TB SAS 2.5in SSD MU 12Gbps Samsung PM1645a MZILT3T2HBLSAD3",
+          "amount": "1299",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZILT3T2HBLSAD3-BN-OE-DEL"
+        },
+        {
+          "native_id": "SAM-MZILT1T9HBJRAD4-BN-OE-DEL",
+          "url": "https://www.disctech.com/Dell-1.92TB-SAS-Read-Intensive-498F8-0498F8-Samsung-MZILT19THBJRAD4-2.5in-SFF-12Gbps",
+          "title": "Dell 1.92TB SAS 12Gbps Read Intensive 2.5in SSD 498F8 0498F8 Samsung MZILT1T9HBJRAD4 PM1643a",
+          "amount": "1079",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZILT1T9HBJRAD4-BN-OE-DEL"
+        },
+        {
+          "native_id": "SAM-MZILT3T8HBLSAD4-BN-OE-DEL",
+          "url": "https://www.disctech.com/Dell-Enterprise-MZILT3T8HBLSAD4-3.84TB-SFF-12Gbps-ISE-SAS-SSD",
+          "title": "Dell 5Y4TP Samsung PM1643a MZ-ILT3T8C 3.84TB SAS 12Gbps ISE Read Intensive SSD",
+          "amount": "1099",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZILT3T8HBLSAD4-BN-OE-DEL"
+        },
+        {
+          "native_id": "INT-SSDSA2CW160G310-RF-OE",
+          "url": "https://www.disctech.com/Intel-320-Series-SSDSA2CW160G310-160GB-2-5-MLC-SSD-SATA-Solid-State-Drive",
+          "title": "Intel 320 Series SSDSA2CW160G310 160GB 2.5\" MLC SSD SATA 3.0 Gb/s Hard Drive",
+          "amount": "24",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=INT-SSDSA2CW160G310-RF-OE"
+        },
+        {
+          "native_id": "MIC-MTFDKCC960TFR-1BC15ABYY-BN-OE",
+          "url": "https://www.disctech.com/Micron-7450-PRO-MTFDKCC960TFR-1BC15ABYY-960GB-U.3-Read-Intensive-RI-PCIe-4.0-NVMe-SSD",
+          "title": "Micron 7450 PRO MTFDKCC960TFR-1BC15ABYY 960GB U.3 Read Intensive RI PCIe 4.0 NVMe 2.5\" SED Opal 2.01 15mm TLC SSD",
+          "amount": "599.99",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=MIC-MTFDKCC960TFR-1BC15ABYY-BN-OE"
+        },
+        {
+          "native_id": "SAM-MZPLJ1T6HBJR-LPB-BN-OE-GEN",
+          "url": "https://www.disctech.com/Samsung-PM1735-MZPLJ1T6HBJR-00007-1.6TB-PCIe-4.0-NVME-Mixed-Use-AIC-HHHL-SSD",
+          "title": "Samsung PM1735 HHHL 1.6TB PCIe 4.0 NVMe Mixed Use SSD Enterprise Storage for Servers Low Profile Bracket",
+          "amount": "1095",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZPLJ1T6HBJR-LPB-BN-OE-GEN"
+        },
+        {
+          "native_id": "SAM-MZPLJ1T6HBJR-BN-OE-DEL",
+          "url": "https://www.disctech.com/Dell-Y7D7D-Samsung-PM1735-MZPLJ1T6HBJR-PCIe-HHHL-NVME-Mixed-Use-Enterprise-SSD",
+          "title": "Dell Y7D7D 1.6TB Mixed Use PCIe 4.0x8 NVMe HHHL SSD AIC MZPLJ1T6HBJR-00AD3",
+          "amount": "1099",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=SAM-MZPLJ1T6HBJR-BN-OE-DEL"
+        },
+        {
+          "native_id": "DEL-ND2TY-BN-OE",
+          "url": "https://www.disctech.com/Dell-ND2TY-iDRAC-vFlash-16GB-SD-HC-Class-10-C10-SD-Card",
+          "title": "Dell ND2TY iDRAC vFlash 16GB SD HC Class 10 C10 SD Card",
+          "amount": "39.99",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DEL-ND2TY-BN-OE"
+        },
+        {
+          "native_id": "DIG-SSD22564-BN-OE",
+          "url": "https://www.disctech.com/Digistor-DIG-SSD22564-256GB-2.5-7mm-SATA-6Gbps-TCG-Opal-2.0-Solid-State-Drive",
+          "title": "Digistor DIG-SSD22564 256GB 2.5\" 7mm SATA 6Gbps TCG Opal 2.0 Solid State Drive",
+          "amount": "109",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=DIG-SSD22564-BN-OE"
+        },
+        {
+          "native_id": "INT-SSDSC2BA100G301-RF-6M",
+          "url": "https://www.disctech.com/Intel-DC-S3700-SSDSC2BA100G301-100GB-SATA-SSD",
+          "title": "Intel DC S3700 SSDSC2BA100G301 100GB SATA SSD",
+          "amount": "39",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=INT-SSDSC2BA100G301-RF-6M"
+        },
+        {
+          "native_id": "LIT-J8-L1032-11-BN-OE-DEG",
+          "url": "https://www.disctech.com/Liteon-J8-L1032-11-32GB-M.2-SATA-Solid-State-Drive",
+          "title": "Dell W5W4N 0W5W4N 32GB M.2 2260 B+M SATA SSD Liteon J8-L1032-11",
+          "amount": "19",
+          "currency": "USD",
+          "availability": "https://schema.org/InStock",
+          "locator": "JSON-LD ItemList product sku=LIT-J8-L1032-11-BN-OE-DEG"
+        }
+      ],
+      "forbidden": [
+        "count HTML and JSON-LD as 48 offers"
+      ],
+      "conflicts": [
+        {
+          "native_id": "SAM-MZ-1LT3T20-BN-OE-GEN",
+          "field": "brand",
+          "claims": [
+            "title Samsung",
+            "JSON-LD brand INTEL"
+          ]
+        }
+      ],
+      "unknowns": [
+        "trusted retrieval time"
+      ]
+    },
+    "central-selected": {
+      "expected_offer_count": 3,
+      "offers": [
+        {
+          "native_id": "452449",
+          "amount": "15.99",
+          "currency": null,
+          "store_counts": [
+            {
+              "store": "San Francisco",
+              "count": "0"
+            },
+            {
+              "store": "San Mateo",
+              "count": "3"
+            },
+            {
+              "store": "Sunnyvale",
+              "count": "7"
+            },
+            {
+              "store": "Santa Clara",
+              "count": "3"
+            },
+            {
+              "store": "East Bay",
+              "count": "0"
+            }
+          ],
+          "locator": "li.product-item enclosing #product-item-info_452449"
+        },
+        {
+          "native_id": "452448",
+          "amount": "19.99",
+          "currency": null,
+          "store_counts": [
+            {
+              "store": "San Francisco",
+              "count": "2"
+            },
+            {
+              "store": "San Mateo",
+              "count": "0"
+            },
+            {
+              "store": "Sunnyvale",
+              "count": "6"
+            },
+            {
+              "store": "Santa Clara",
+              "count": "0"
+            },
+            {
+              "store": "East Bay",
+              "count": "2"
+            }
+          ],
+          "locator": "li.product-item enclosing #product-item-info_452448"
+        },
+        {
+          "native_id": "449525",
+          "amount": "14.99",
+          "currency": null,
+          "store_counts": [
+            {
+              "store": "San Francisco",
+              "count": "0"
+            },
+            {
+              "store": "San Mateo",
+              "count": "0"
+            },
+            {
+              "store": "Sunnyvale",
+              "count": "2"
+            },
+            {
+              "store": "Santa Clara",
+              "count": "2"
+            },
+            {
+              "store": "East Bay",
+              "count": "2"
+            }
+          ],
+          "locator": "li.product-item enclosing #product-item-info_449525"
+        }
+      ],
+      "expected_store_count_observations": 15,
+      "unknowns": [
+        "currency",
+        "trusted retrieval time"
+      ],
+      "requirements": [
+        "retain shared inventory disclaimer and per-store counts"
+      ],
+      "forbidden": [
+        "other 93 products made available to parser",
+        "store count mistaken for purchase quantity"
+      ]
+    }
+  },
+  "gaps": [
+    "No verified real multi-item social post: Atom examples are authored",
+    "No verified real split auction response: GovDeals fixture is authored/enriched",
+    "Acquisition provenance and exact timestamp meaning remain unverified for historical captures",
+    "No independently confirmed non-Bright-Data acquisition route in this frozen set"
+  ]
+}

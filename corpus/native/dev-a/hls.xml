@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>newest submissions : homelabsales</title>
+  <entry>
+    <author><name>/u/testseller</name></author>
+    <content type="html">&lt;div class="md"&gt;&lt;p&gt;4x 8TB Seagate Exos SATA HDDs $280&lt;/p&gt;&lt;p&gt;Samsung 980 Pro 2TB NVMe SSD $110&lt;/p&gt;&lt;/div&gt;</content>
+    <id>t3_abc123</id>
+    <link href="https://www.reddit.com/r/homelabsales/comments/abc123/fsusmi_drives/" />
+    <title>[FS][US-MI] Seagate Exos HDDs and SSD</title>
+    <updated>2026-08-15T20:00:00+00:00</updated>
+  </entry>
+  <entry>
+    <author><name>/u/seller2</name></author>
+    <content type="html">&lt;div class="md"&gt;&lt;p&gt;2x 20TB WD Gold SATA $150 each&lt;/p&gt;&lt;p&gt;6x 12TB HGST SAS HDD $360&lt;/p&gt;&lt;/div&gt;</content>
+    <id>t3_def456</id>
+    <link href="https://www.reddit.com/r/homelabsales/comments/def456/fsuse_storage/" />
+    <title>[FS][US-E] HDD cleanout</title>
+    <updated>2026-08-15T20:05:00+00:00</updated>
+  </entry>
+  <entry>
+    <author><name>/u/buyer</name></author>
+    <content type="html">&lt;div class="md"&gt;&lt;p&gt;Looking for 4x 18TB Seagate Exos $100 each&lt;/p&gt;&lt;/div&gt;</content>
+    <id>t3_wanted1</id>
+    <link href="https://www.reddit.com/r/homelabsales/comments/wanted1/wuse_wtb/" />
+    <title>[W][US-E] 18TB drives</title>
+    <updated>2026-08-15T20:10:00+00:00</updated>
+  </entry>
+</feed>
