@@ -1,0 +1,7 @@
+# Isolated exercise target. No credentials and no inherited application schema.
+project_id = "late-wave-13685431"
+branch_id = "br-curly-dust-b4dszjr9"
+branch_name = "dev/ingestion-exercise"
+database = "ingestion_spike"
+role = "neondb_owner"
+host = "ep-winter-truth-b4l1u5nl.c-6.us-east-2.aws.neon.tech"
