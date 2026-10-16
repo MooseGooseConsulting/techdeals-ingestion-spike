@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 SENSITIVE_KEYS = frozenset({"api_key", "authorization", "proxy_authorization", "x-api-key"})
 
 
