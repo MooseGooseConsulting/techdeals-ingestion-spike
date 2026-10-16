@@ -28,6 +28,10 @@ describing one listing. The parser and database representation must be checked
 against that variety before implementation.
 The central proposal is one shared LLM-backed parser that also works on
 unfamiliar sources, supported by general format readers and database code.
+New or meaningfully changed entries that need interpretation still require
+the model to read their relevant content; batching does not eliminate that
+work. Unchanged content can reuse an existing valid interpretation. See the
+[per-entry execution model](docs/data-contract.md#interpretation-work-for-each-entry).
 
 The intended destination is an improvement to the main TechDeals project after
 the behavior has been demonstrated. Organization ownership or a successful
