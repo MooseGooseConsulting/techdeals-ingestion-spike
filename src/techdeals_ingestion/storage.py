@@ -58,10 +58,9 @@ def semantic_key(package, unit, parser_fingerprint):
 
 def _rebind(value, mapping):
     if isinstance(value, dict):
-        return {
-            k: mapping.get(v, v) if k == "capture_id" else _rebind(v, mapping)
-            for k, v in value.items()
-        }
+        if set(value) == {"capture_id", "locator"}:
+            return {**value, "capture_id": mapping.get(value["capture_id"], value["capture_id"])}
+        return {k: v if k == "value" else _rebind(v, mapping) for k, v in value.items()}
     if isinstance(value, list):
         return [_rebind(v, mapping) for v in value]
     return value
@@ -100,12 +99,17 @@ def _offer_meaning(offer):
         if k not in {"local_id", "evidence", "identity_claim", "items", "prices", "relations"}
     }
     result["items"] = ordered([_meaning(item) for item in offer["items"]])
-    result["prices"] = ordered(
-        [
-            {**_meaning(price), "scope_refs": ordered([target(ref) for ref in price["scope_refs"]])}
-            for price in offer["prices"]
-        ]
+    prices = [
+        {**_meaning(price), "scope_refs": ordered([target(ref) for ref in price["scope_refs"]])}
+        for price in offer["prices"]
+    ]
+    targets.update(
+        {
+            price["local_id"]: ["price", meaning]
+            for price, meaning in zip(offer["prices"], prices, strict=True)
+        }
     )
+    result["prices"] = ordered(prices)
     result["relations"] = ordered(
         [
             {

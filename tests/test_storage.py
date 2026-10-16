@@ -52,6 +52,12 @@ def test_rebinding_only_changes_evidence_capture_ids():
         "evidence": [{"capture_id": "new", "locator": "$"}],
     }
 
+    native = {"capture_id": "old", "locator": "native locator"}
+    fact = {"value": native, "evidence": [{"capture_id": "old", "locator": "$"}]}
+    rebound = _rebind(fact, {"old": "new"})
+    assert rebound["value"] == native
+    assert rebound["evidence"] == [{"capture_id": "new", "locator": "$"}]
+
 
 def test_source_date_changes_affect_meaning_but_evidence_ids_do_not():
     from techdeals_ingestion.storage import _meaning
@@ -107,6 +113,9 @@ def test_meaning_normalizes_local_graph_ids_but_preserves_scope_and_relationship
 
     first = offer("first-")
     renamed = offer("second-", reverse=True)
+    assert _meaning(first) == _meaning(renamed)
+    first["relations"][0]["object_ref"] = "first-price"
+    renamed["relations"][0]["object_ref"] = "second-price"
     assert _meaning(first) == _meaning(renamed)
     assert _meaning(first) != _meaning(offer("third-", price_target="ram"))
     renamed["relations"][0]["object_ref"] = "second-offer"
