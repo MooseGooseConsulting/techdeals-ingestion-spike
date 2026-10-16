@@ -14,21 +14,40 @@ def _fixture_repo(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     native = repo / "corpus" / "native" / "dev-a"
     native.mkdir(parents=True)
-    product = {"id": 101, "title": "Original part", "variants": [
-        {"id": 201, "product_id": 101, "price": "14.99", "available": True}
-    ]}
+    product = {
+        "id": 101,
+        "title": "Original part",
+        "variants": [{"id": 201, "product_id": 101, "price": "14.99", "available": True}],
+    }
     (native / "spd.json").write_text(json.dumps({"products": [product]}))
-    (repo / "corpus/manifest.json").write_text(json.dumps({
-        "packages": {"dev-a": ["spd"]},
-        "captures": [{"id": "spd", "path": "corpus/native/dev-a/spd.json",
-                      "acquisition_key": "a", "source_namespace": "example",
-                      "media_type": "application/json"}],
-    }))
+    (repo / "corpus/manifest.json").write_text(
+        json.dumps(
+            {
+                "packages": {"dev-a": ["spd"]},
+                "captures": [
+                    {
+                        "id": "spd",
+                        "path": "corpus/native/dev-a/spd.json",
+                        "acquisition_key": "a",
+                        "source_namespace": "example",
+                        "media_type": "application/json",
+                    }
+                ],
+            }
+        )
+    )
     (repo / "corpus/oracle").mkdir()
-    (repo / "corpus/oracle/expected.json").write_text(json.dumps({
-        "cases": {"spd": {"offers": [{"native_id": "101", "variant_id": "201",
-                                        "amount": "14.99"}]}}
-    }))
+    (repo / "corpus/oracle/expected.json").write_text(
+        json.dumps(
+            {
+                "cases": {
+                    "spd": {
+                        "offers": [{"native_id": "101", "variant_id": "201", "amount": "14.99"}]
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setitem(sys.modules, "techdeals_ingestion", types.ModuleType("techdeals_ingestion"))
     models = types.ModuleType("techdeals_ingestion.models")
 
@@ -42,6 +61,7 @@ def _fixture_repo(tmp_path, monkeypatch):
             class Parsed:
                 def model_dump(self, mode=None):
                     return data
+
             return Parsed()
 
         @staticmethod
@@ -108,11 +128,11 @@ def test_dev_evaluation_and_hidden_mutation_catch_hardcoding(tmp_path, monkeypat
     assert result["passed"], result
     assert result["mutation_passed"]
     # Exact example lookup is incorrect once price and product count change.
-    (workspace / "extractor.py").write_text('''import argparse,json
+    (workspace / "extractor.py").write_text("""import argparse,json
 from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument("--manifest");p.add_argument("--output");a=p.parse_args()
 Path(a.output).write_text(json.dumps({"entries":[{"native_id":"101","variant_id":"201","source_refs":[{"input_id":"spd"}],"prices":[{"kind":"ask","amount":"14.99","original":"14.99","currency":None}]}],"issues":[]}))
-''')
+""")
     result = harness.evaluate(workspace)
     assert not result["passed"]
     assert "Metamorphic test failed" in " ".join(result["errors"])
@@ -160,11 +180,16 @@ def test_agent_run_repairs_in_same_session(tmp_path, monkeypatch):
         seen.append((prompt, session))
         return 0, "ses_abc"
 
-    checks = iter([{"passed": False, "errors": ["Missing variant 123"]},
-                   {"passed": True, "errors": []}])
+    checks = iter(
+        [{"passed": False, "errors": ["Missing variant 123"]}, {"passed": True, "errors": []}]
+    )
     monkeypatch.setattr(harness, "_agent_turn", fake_agent)
     monkeypatch.setattr(harness, "evaluate", lambda *a, **k: next(checks))
-    monkeypatch.setattr(harness.subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=1, stderr="not installed"))
+    monkeypatch.setattr(
+        harness.subprocess,
+        "run",
+        lambda *a, **k: types.SimpleNamespace(returncode=1, stderr="not installed"),
+    )
     result = harness.run(tmp_path, "openrouter/example:free", "opencode", rounds=3)
     assert result["status"] == "passed"
     assert seen[1][1] == "ses_abc"
