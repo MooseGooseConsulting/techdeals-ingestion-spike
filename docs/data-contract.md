@@ -224,12 +224,60 @@ it cannot recover facts that were never captured or establish a missing date.
 
 Batching means multiple entries in each model request. Retry and recovery paths
 must preserve that requirement instead of falling back to one request per entry.
+Batching reduces the number of requests; it does not eliminate the work of
+reading and interpreting the entries supplied in those requests.
 
 Parsed fields need their source reference and parser version. Derived arithmetic
 and unit conversions should use the stated inputs and explicit rules. Parsing
 the same capture again may revise its interpretation; it must not manufacture
 a new market observation. The batch association must survive reordered or
 missing model output.
+
+### Interpretation work for each entry
+
+One shared parser means reusing the parsing program and output schema across
+different inputs. It does not mean understanding a source's format once removes
+the need to interpret every differently written record inside it. For each new
+record whose meaning varies from entry to entry, this design requires the LLM
+to read and interpret its relevant content. Knowing the surrounding JSON, CSV,
+or feed structure does not establish what the individual descriptions mean.
+
+For example, these illustrative descriptions require different interpretations:
+
+- "Four drives, $200 for the lot."
+- "Four drives available, $200 each."
+- "Server $200, drives pictured but not included."
+
+The wording determines which items are offered and what the price covers.
+These are explanatory examples, not real captures or evidence of a working
+parser. The model reads entries with the context needed to interpret them;
+there is no requirement for one request per literal line or field. A shared
+batch can contain many entries, each of which still needs to be interpreted.
+
+Explicit fields with established, consistent meanings can be copied and
+normalized by ordinary code. The LLM is used for the information that needs
+interpretation. This does not assume a manually written parser for every
+possible source, or that all incoming information can bypass the model.
+
+| Incoming information | Required interpretation behavior |
+|---|---|
+| New heterogeneous entry needing interpretation | Supply its relevant content and context to the LLM, preserving its association with the input |
+| Meaningfully changed entry | Re-evaluate the interpretation affected by the change, with enough context to preserve item and price associations |
+| Unchanged content and context with a reusable validated interpretation | Reuse that interpretation; a later sighting alone does not require another model call |
+| Explicit structured fields with established meanings | Copy and normalize directly where possible; do not require LLM interpretation of those fields |
+| Deliberate reprocessing with a revised parser | Produce a separately versioned interpretation of existing evidence, retaining the original observation dates |
+
+Decide reuse before requesting interpretation, using the content and context
+the interpretation depends on and its parser version. A missing, failed, or
+incompatible prior result is not a successful reusable parse. The
+[rescrape rules](#listing-identity-and-repeated-scrapes) still determine identity,
+freshness, and history. Reuse for unchanged content does not remove the work
+required to interpret genuinely new or meaningfully changed entries.
+
+This is the proposed execution model, not demonstrated functionality. We have
+not yet established whether its output is sufficiently complete and correct,
+or whether it can process the intended ingestion volume in practice. The first
+parser experiment must examine those questions using varied real inputs.
 
 ## Date meanings
 

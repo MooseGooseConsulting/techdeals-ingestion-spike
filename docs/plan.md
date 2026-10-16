@@ -72,6 +72,15 @@ content into useful records. The initial shapes below are evidence for testing
 that parser, not separate source-parser implementation projects. Generic input
 reading, validation, and database bookkeeping support it.
 
+This proposal uses the LLM during ingestion of each new or meaningfully changed
+entry that needs contextual interpretation. Sharing the parser does not remove
+that work, and batching reduces request count without removing the content the
+model must interpret. Established structured fields can be handled directly;
+unchanged content can reuse a valid prior interpretation. See
+[interpretation work for each entry](data-contract.md#interpretation-work-for-each-entry).
+Completeness, correctness, and practicality at the intended ingestion volume
+remain to be demonstrated.
+
 Build order: inspect varied captures and expected results, define a provisional
 parser output schema, build and inspect the batch parser, then implement the
 database representation and verify agent reads. Parser output files are an
@@ -152,10 +161,20 @@ history, deduplication, and usable agent queries.
    selected saved captures, prepares batches, and writes structured results with
    their input context and evidence references to inspectable files. Run varied
    development inputs together, including partial or failed interpretations.
+   Reuse a compatible validated interpretation before making a model call when
+   its input content and context are unchanged. Demonstrate this with a repeated
+   run, and demonstrate that changed content is interpreted as needed. Keep
+   this initial reuse behavior inspectable in the file-based experiment;
+   database identity and history are added in the next step.
    Check that every expected item and price survives and remains correctly
    associated. Preserve dates and unknowns; validate input references and
    established structured values. Refine the output schema against actual
    failures before settling database tables.
+
+   Establish the expected ingestion volume from the existing collectors. Record
+   the inspected run's input size, model request count, elapsed time, and any
+   failures or retries so the per-entry approach can be assessed against that
+   workload. Multiple entries in a request must not conceal omitted items.
 
    Done when the executable runs with the selected free endpoint in batches,
    and inspected development results establish the intended extraction behavior
