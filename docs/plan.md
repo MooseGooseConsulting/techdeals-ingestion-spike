@@ -45,6 +45,17 @@ Its [rescrape cases](data-contract.md#listing-identity-and-repeated-scrapes) are
 part of the first working delivery. Select the open design choices there before
 finalizing the schema or collector output.
 
+## Runtime configuration
+
+Use free models only, with the chosen model and endpoint in committed parser
+configuration. Supply credentials and connection details through
+Doppler-injected process environment variables. The application must not
+automatically load a local `.env` file. Keep credentials out of source files,
+captured evidence, model request logs, and generated artifacts.
+
+Database development uses an isolated branch of an existing Neon project, as
+specified in the implementation steps below.
+
 ## First deliverable: one useful, executable slice
 
 1. **Choose varied real captures and inspect them.** Candidate structures include
