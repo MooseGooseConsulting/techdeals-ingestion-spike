@@ -4,6 +4,10 @@ Turn heterogeneous hardware listings into a database that other agents can
 query and tally for their analysis. Preserve the source, scraped item
 and price facts, source-stated associations, and changes over time.
 
+This open spike contains a candidate implementation for design review. Its
+architecture and extraction quality are not approved or demonstrated as ready
+for production use.
+
 The runtime has one path: **native sources → one PydanticAI extraction agent →
 entries with named fields and nested prices → Neon PostgreSQL → SQL reads**.
 The former graph contract, two parser strategies, discovery loop and experiment

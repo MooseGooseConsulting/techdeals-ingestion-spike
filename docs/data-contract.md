@@ -226,8 +226,9 @@ needed for persistence is retained from the start.
 
 ## Where LLM parsing fits
 
-The shared LLM-backed parser is the main approved approach to varied source
-layouts and contextual interpretation. It receives captured content with source
+The current candidate uses a shared LLM-backed parser for varied source layouts
+and contextual interpretation. This approach remains subject to design review.
+It receives captured content with source
 and collection context and returns records in a common, extensible structure.
 It must handle unfamiliar sources without depending on a handwritten parser
 for each one. Structured source information can be copied directly. Keep the

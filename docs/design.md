@@ -1,9 +1,10 @@
 # Scraped source to useful database records
 
-Design correction, 2026-10-16. The runtime now implements the direct entry
-interface described here. The older graph prototype has been removed. Live
-source-to-output-to-SQL evidence and remaining gaps are reported in README.md;
-implementation alone does not establish useful or complete extraction.
+Candidate implementation snapshot, 2026-10-16. The runtime currently implements
+the direct entry interface described here; this is not an approved target design.
+The older graph prototype has been removed. Live source-to-output-to-SQL evidence
+and remaining gaps are reported in README.md; implementation alone does not
+establish useful or complete extraction.
 
 ## The job
 
