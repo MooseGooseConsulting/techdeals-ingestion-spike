@@ -35,7 +35,7 @@ The agent reads `captures.json`, `TASK.md`, the original native `inputs/*` and t
 python extractor.py --manifest captures.json --output extraction.json
 ```
 
-Your existing `Source → Extraction` Pydantic contract and parser's source-reference validator are applied **after** the OpenCode run. The independent oracle is never copied into the agent's workspace. Development evaluation compares the extracted priced-offer multiset against the existing oracle. A blind mutation changes prices and adds a product in the SPD case, or changes a variant price in the eBay case, to catch trivial hardcoding. This does **not** prove generalization to arbitrary formats or all semantic correctness (e.g. included-versus-supported components); those require further tests.
+Your existing `Source → Extraction` Pydantic contract and parser's source-reference validator are applied **after** the OpenCode run. The independent oracle is never copied into the agent's workspace or disclosed in the task. The evaluator checks every capture against its original source bytes before grading. Development evaluation compares the extracted priced-offer multiset against the existing oracle. A blind mutation changes prices and adds a product in the SPD case, or changes a variant price in the eBay case, to catch trivial hardcoding. This does **not** prove generalization to arbitrary formats or all semantic correctness (e.g. included-versus-supported components); those require further tests.
 
 ## Debugging and artifacts
 
@@ -57,3 +57,4 @@ OpenCode's regular TUI can open the session using `opencode --session <id>` when
 - This is a coding-agent architecture experiment, not a production ingestion replacement. The generated script remains in its workspace until reviewed and incorporated.
 - Price and offer identity are checked. Full provenance fidelity, supported-versus-installed hardware, and same-post item identity still need semantic validation and later storage design.
 - Free quotas can expire; a `:free` ID is a price gate, **not** a guarantee of provider availability or zero incidental tool/service charges. OpenCode run with `--pure` and only this model, no paid fallback.
+**Evaluation isolation note:** The task workspace omits the oracle, and the harness checks original source hashes. A local process with full shell access is not a security boundary against a deliberately adversarial agent; a separate container or VM is needed for strict holdout secrecy. The existing dev corpus is appropriate for the initial engineering spike.
