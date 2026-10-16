@@ -1076,7 +1076,7 @@
           "currency": null,
           "scope": "one adapter card, not an included U.2 drive",
           "available": true,
-          "seller": "ServerPartDeals",
+          "vendor": "ServerPartDeals",
           "sku": "U2AIC_NB"
         }
       ],
@@ -1136,6 +1136,7 @@
       ],
       "unknowns": [
         "currency",
+        "seller",
         "seller location",
         "condition",
         "exact available quantity",

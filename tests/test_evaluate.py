@@ -4,10 +4,11 @@ from pathlib import Path
 from techdeals_ingestion.contracts import (
     CaptureInput,
     EvidenceRef,
-    Fact,
     Offer,
+    OfferFields,
     ParseBatchResult,
     Price,
+    TextFact,
     UnitResult,
     WorkPackage,
 )
@@ -41,7 +42,7 @@ def fixture(tmp_path, *, currency=None, scope=("offer",)):
     )
     offer = Offer(
         local_id="offer",
-        fields={"native_id": Fact(name="native_id", value="native-123")},
+        fields=OfferFields(native_id=TextFact(name="native_id", value="native-123")),
         prices=[
             Price(
                 local_id="price",
@@ -87,7 +88,7 @@ def test_false_currency_and_wrong_scope_fail(tmp_path):
 
 def test_title_match_does_not_establish_identity(tmp_path):
     oracle, package, result = fixture(tmp_path)
-    result.units[0].offers[0].fields.clear()
+    result.units[0].offers[0].fields = OfferFields()
     result.units[0].offers[0].title = "native-123"
     assert (
         checks(evaluate(result, package, oracle))["native option identity retained uniquely"][
@@ -129,3 +130,16 @@ def test_roundtrip_decimal_and_date_gating(tmp_path):
     )
     assert report["checks"][2]["status"] == "fail"
     assert report["checks"][3]["status"] == "fail"
+
+
+def test_identity_match_uses_named_identity_column(tmp_path):
+    oracle, package, result = fixture(tmp_path)
+    fields = result.units[0].offers[0].fields
+    fields.seller = TextFact(name="seller", value="native-123")
+    fields.native_id = TextFact(name="native_id", status="unknown")
+    assert (
+        checks(evaluate(result, package, oracle))["native option identity retained uniquely"][
+            "status"
+        ]
+        == "fail"
+    )

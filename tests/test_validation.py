@@ -53,7 +53,7 @@ def test_scope_and_resolution(tmp_path):
     a["offers"] = [
         {
             "local_id": "o",
-            "fields": {
+            "additional_facts": {
                 "bad": {
                     "name": "bad",
                     "evidence": [{"capture_id": "b", "locator": "$"}],
@@ -89,7 +89,7 @@ def test_unsupported_facts_titles_and_prices_rejected(tmp_path):
         {
             "local_id": "o",
             "title": "unsupported",
-            "fields": {"capacity": {"name": "capacity", "value": 64}},
+            "additional_facts": {"capacity": {"name": "capacity", "value": 64}},
             "items": [{"local_id": "i", "role": "included", "title": "DIMM"}],
             "prices": [{"local_id": "p", "kind": "ask", "amount": "12"}],
         }
@@ -105,7 +105,7 @@ def test_unsupported_facts_titles_and_prices_rejected(tmp_path):
     ref = {"capture_id": "a", "locator": "$"}
     offer = a["offers"][0]
     offer["evidence"] = [ref]
-    offer["fields"]["capacity"]["evidence"] = [ref]
+    offer["additional_facts"]["capacity"]["evidence"] = [ref]
     offer["items"][0]["evidence"] = [ref]
     offer["prices"][0].update(evidence=[ref], scope_refs=["i"])
     assert not validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
@@ -157,3 +157,70 @@ def test_dates_and_relationships_require_actual_source_references(tmp_path):
     a["offers"][0]["source_dates"][0]["evidence"] = [ref]
     a["offers"][0]["relations"][0]["evidence"] = [ref]
     assert not validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
+
+
+def test_offer_columns_are_explicit_typed_and_preserve_unknowns():
+    from decimal import Decimal
+
+    from techdeals_ingestion.contracts import Offer, OfferFields
+
+    offer = Offer.model_validate(
+        {
+            "local_id": "o",
+            "fields": {
+                "seller": {"name": "seller", "value": "Shop", "original": "Shop LLC"},
+                "available_quantity": {"name": "stock", "value": "123456789.123456789"},
+            },
+            "additional_facts": {"vendor": {"name": "vendor", "value": "Manufacturer"}},
+        }
+    )
+    assert offer.fields.seller.value == "Shop"
+    assert offer.fields.available_quantity.value == Decimal("123456789.123456789")
+    assert offer.fields.location.value is None
+    assert offer.fields.location.status == "unknown"
+    payload = offer.model_dump(mode="json")
+    assert payload["fields"]["available_quantity"]["value"] == "123456789.123456789"
+    assert payload["fields"]["seller"]["original"] == "Shop LLC"
+    assert payload["additional_facts"]["vendor"]["value"] == "Manufacturer"
+    assert Offer.model_validate(payload) == offer
+    assert set(OfferFields.model_json_schema()["properties"]) == {
+        "seller",
+        "location",
+        "condition",
+        "availability",
+        "description",
+        "native_id",
+        "variant_id",
+        "intent",
+        "url",
+        "available_quantity",
+    }
+
+
+@pytest.mark.parametrize("value", [123, True, ["Shop"], {"seller": "Shop"}])
+def test_text_columns_reject_non_string_values(value):
+    from techdeals_ingestion.contracts import Offer
+
+    with pytest.raises(ValidationError):
+        Offer.model_validate(
+            {"local_id": "o", "fields": {"seller": {"name": "seller", "value": value}}}
+        )
+
+
+def test_named_columns_require_evidence_for_values(tmp_path):
+    units, index = setup(tmp_path)
+    a = unit("a")
+    a["offers"] = [
+        {
+            "local_id": "o",
+            "fields": {
+                "seller": {"name": "seller", "value": "Shop"},
+                "available_quantity": {"name": "stock", "value": "2.5"},
+            },
+        }
+    ]
+    issues = validate_result(ParseBatchResult(batch_id="x", units=[a, unit("b")]), units, index)
+    assert {(i.code, i.path) for i in issues} == {
+        ("missing_fact_evidence", "units/0/offers/o/fields/seller"),
+        ("missing_fact_evidence", "units/0/offers/o/fields/available_quantity"),
+    }

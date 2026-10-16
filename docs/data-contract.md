@@ -185,6 +185,14 @@ definitions and example records come from inspection of the initial captures.
 | Source dates | Dates stated in the supplied content, with their meaning, original text, and source references; unresolved meanings remain explicit |
 | Unresolved information | Ambiguous fields or associations, conflicts, and entries that could not be interpreted, retaining the relevant evidence |
 
+The executable names the common columns in `OfferFields`: seller, location,
+condition, availability, description, native_id, variant_id, intent, and url are
+string facts; available_quantity is an exact decimal fact. Missing source values
+remain null with unknown status. A vendor or manufacturer is not automatically a
+seller. Other source facts use `additional_facts`; item specifications remain on
+their items. Prices and source dates have separate typed collections so multiple
+amounts and different date meanings are preserved.
+
 The result can contain zero, one, or many extracted entries. An empty item
 array needs a disposition, such as no offer present or interpretation failed;
 it must not silently count as a successful ingestion. A component mentioned

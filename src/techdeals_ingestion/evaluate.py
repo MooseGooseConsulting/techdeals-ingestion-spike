@@ -25,25 +25,15 @@ def _check(requirement, expected, actual, source, locator, status=None):
     }
 
 
-def _leaves(value):
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if key not in {"title", "original", "evidence"}:
-                yield from _leaves(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _leaves(child)
-    elif value is not None:
-        yield str(value)
-
-
 def _matches(offer, expected):
     """Exact asserted native identity, never a title word similarity match."""
-    values = set(_leaves({k: v.model_dump(mode="json") for k, v in offer.fields.items()}))
-    if offer.identity_claim:
-        values.update(_leaves(offer.identity_claim.model_dump(mode="json")))
-    key = expected.get("variant_id") or expected.get("native_id") or expected.get("obs_id")
-    return key is not None and str(key) in values
+    if expected.get("variant_id") is not None:
+        return offer.fields.variant_id.value == str(expected["variant_id"])
+    if expected.get("native_id") is not None:
+        return offer.fields.native_id.value == str(expected["native_id"])
+    key = expected.get("obs_id")
+    fact = offer.additional_facts.get("obs_id")
+    return key is not None and fact is not None and str(key) == str(fact.value)
 
 
 def evaluate(result: ParseBatchResult, package: WorkPackage, oracle_path) -> dict:

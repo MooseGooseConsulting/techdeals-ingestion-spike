@@ -87,8 +87,11 @@ def validate_result(
                     offer_path,
                     "offer title requires evidence",
                 )
-            for key, fact in offer.fields.items():
+            for key in type(offer.fields).model_fields:
+                fact = getattr(offer.fields, key)
                 require_fact_evidence(fact, offer_path + "/fields/" + key)
+            for key, fact in offer.additional_facts.items():
+                require_fact_evidence(fact, offer_path + "/additional_facts/" + key)
             if offer.identity_claim is not None:
                 require_fact_evidence(offer.identity_claim, offer_path + "/identity_claim")
             for item in offer.items:

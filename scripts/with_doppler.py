@@ -19,6 +19,16 @@ def captured(command):
     return result.stdout.strip()
 
 
+def check_target(connection, target, *, pooled=False):
+    parsed = urlsplit(connection)
+    host = target["host"]
+    if pooled:
+        endpoint, domain = host.split(".", 1)
+        host = endpoint + "-pooler." + domain
+    if parsed.hostname != host or parsed.path != "/" + target["database"]:
+        raise RuntimeError("Neon returned a connection outside the configured exercise target")
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit("Usage: python scripts/with_doppler.py COMMAND [ARGS...]")
@@ -57,11 +67,11 @@ def main():
         target["role"],
     ]
     direct = captured(base)
-    parsed = urlsplit(direct)
-    if parsed.hostname != target["host"] or parsed.path != "/" + target["database"]:
-        raise RuntimeError("Neon returned a connection outside the configured exercise target")
+    pooled = captured([*base, "--pooled"])
+    check_target(direct, target)
+    check_target(pooled, target, pooled=True)
     env["DATABASE_URL_UNPOOLED"] = direct
-    env["DATABASE_URL"] = captured([*base, "--pooled"])
+    env["DATABASE_URL"] = pooled
     env["TEST_DATABASE_URL"] = direct
     env["PYDANTIC_AI_NO_BANNER"] = "1"
     raise SystemExit(subprocess.run(sys.argv[1:], check=False, cwd=root, env=env).returncode)

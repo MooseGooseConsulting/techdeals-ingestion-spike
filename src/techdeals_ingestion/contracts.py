@@ -44,6 +44,41 @@ class Fact(Contract):
     evidence: list[EvidenceRef] = Field(default_factory=list)
 
 
+class TextFact(Fact):
+    value: str | None = Field(default=None, strict=True)
+
+
+class QuantityFact(Fact):
+    value: Decimal | None = None
+
+
+class OfferFields(Contract):
+    """Common extraction columns; absent source information stays explicitly unknown."""
+
+    seller: TextFact = Field(default_factory=lambda: TextFact(name="seller", status="unknown"))
+    location: TextFact = Field(default_factory=lambda: TextFact(name="location", status="unknown"))
+    condition: TextFact = Field(
+        default_factory=lambda: TextFact(name="condition", status="unknown")
+    )
+    availability: TextFact = Field(
+        default_factory=lambda: TextFact(name="availability", status="unknown")
+    )
+    description: TextFact = Field(
+        default_factory=lambda: TextFact(name="description", status="unknown")
+    )
+    native_id: TextFact = Field(
+        default_factory=lambda: TextFact(name="native_id", status="unknown")
+    )
+    variant_id: TextFact = Field(
+        default_factory=lambda: TextFact(name="variant_id", status="unknown")
+    )
+    intent: TextFact = Field(default_factory=lambda: TextFact(name="intent", status="unknown"))
+    url: TextFact = Field(default_factory=lambda: TextFact(name="url", status="unknown"))
+    available_quantity: QuantityFact = Field(
+        default_factory=lambda: QuantityFact(name="available_quantity", status="unknown")
+    )
+
+
 class Item(Contract):
     local_id: str
     title: str | None = None
@@ -56,10 +91,16 @@ class Item(Contract):
 class Price(Contract):
     local_id: str
     amount: Decimal | None = None
-    currency: str | None = None
+    currency: str | None = Field(
+        default=None,
+        description="Currency explicitly established by the supplied source; null when unknown.",
+    )
     kind: str
     original: str | None = None
-    scope_refs: list[str] = Field(default_factory=list)
+    scope_refs: list[str] = Field(
+        default_factory=list,
+        description="local_id of this offer or its items that this price buys; never capture IDs.",
+    )
     quantity: Decimal | None = None
     conditions: list[Fact] = Field(default_factory=list)
     evidence: list[EvidenceRef] = Field(default_factory=list)
@@ -83,7 +124,8 @@ class SourceDate(Contract):
 class Offer(Contract):
     local_id: str
     title: str | None = None
-    fields: dict[str, Fact] = Field(default_factory=dict)
+    fields: OfferFields = Field(default_factory=OfferFields)
+    additional_facts: dict[str, Fact] = Field(default_factory=dict)
     items: list[Item] = Field(default_factory=list)
     prices: list[Price] = Field(default_factory=list)
     relations: list[Relationship] = Field(default_factory=list)

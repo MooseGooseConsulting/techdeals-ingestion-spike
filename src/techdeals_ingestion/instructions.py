@@ -14,10 +14,15 @@ A root headline and selected variants can be duplicate representations; do not a
 an extra purchase. Do not duplicate offers shown in both HTML and structured data.
 Trade/wanted posts retain their intent and must not become available sell inventory.
 
-Use Offer.fields keys seller, location, condition, availability, available_quantity,
-description, native_id, variant_id and intent when those meanings are supported.
-Preserve other source fields as additional facts, with native names and original
-values. Place hardware attributes on the appropriate item. Attribute names must
+Fill the named Offer.fields columns: seller, location, condition, availability,
+description, native_id, variant_id, intent, url (string facts) and
+available_quantity (an exact decimal fact). Each column retains name, value,
+status, original, unit and evidence. Keep unsupported columns null with unknown
+status. Native identifiers are strings even when the source represents them as
+numbers. A manufacturer/vendor is not automatically the seller.
+Keep native item IDs and SKUs distinct; retain the SKU under its native name.
+Preserve other source fields in Offer.additional_facts, with native names and
+original values. Place hardware attributes on the appropriate item. Attribute names must
 distinguish installed from supported/optional/compatible capacity and specifications.
 Source identity claims preserve actual native identifiers with evidence; they do
 not authorize merging database listings. Unknown identity remains unknown.
@@ -29,6 +34,12 @@ or replaced by import/parse time. A dollar sign alone does not establish ISO cur
 Exported normalized columns and derived estimates remain claims with provenance;
 conflicting source statements survive explicitly instead of silently choosing one.
 Store-specific inventory is scoped to each store and preserves any accuracy caveat.
+Retain availability qualifications and warranty terms, not just an optimistic
+stock label. Copy original source strings faithfully without extra escaping,
+repairing markup, or completing truncated text; report meaningful truncation.
+Source-date field names and evidence must distinguish product, variant, and
+image timestamps. Original raw fields remain available even when interpretation
+is incomplete; use partial status and state any material unextracted information.
 
 Every non-null fact, item title, offer title, price and relationship needs resolvable
 EvidenceRefs from the allowed captures. Cite the most specific supplied reference
