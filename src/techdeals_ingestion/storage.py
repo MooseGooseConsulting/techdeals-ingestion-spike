@@ -128,6 +128,7 @@ class Store:
     def __init__(self, dsn):
         self.dsn = dsn
         self._reuse_sources = {}
+        self._reuse_signature = None
 
     def connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
@@ -194,8 +195,11 @@ class Store:
         return [c.capture_id for c in package.captures]
 
     def reuse(self, package, index, experiment_id, arm, parser_fingerprint):
+        self._reuse_sources = {}
+        self._reuse_signature = None
         units = prepare_units(package)
         results = []
+        pending_sources = {}
         with self.connect() as conn:
             for unit in units:
                 key = semantic_key(package, unit, parser_fingerprint)
@@ -215,9 +219,18 @@ class Store:
                 payload = _rebind(prior["payload"], dict(zip(old_ids, new_ids)))
                 payload["unit_id"] = unit.unit_id
                 results.append(payload)
-                self._reuse_sources[(package.package_id, unit.unit_id, key)] = prior["result_id"]
-        result = ParseBatchResult(batch_id="reuse-" + uuid4().hex, units=results)
-        return require_valid_result(result, units, index)
+                pending_sources[(package.package_id, unit.unit_id, key)] = prior["result_id"]
+        result = ParseBatchResult(batch_id=package.package_id, units=results)
+        result = require_valid_result(result, units, index)
+        self._reuse_sources = pending_sources
+        self._reuse_signature = (
+            package.package_id,
+            experiment_id,
+            arm,
+            parser_fingerprint,
+            digest(result.model_dump(mode="json")),
+        )
+        return result
 
     def publish(
         self,
@@ -229,6 +242,18 @@ class Store:
         attempt_key,
         parser_fingerprint="unspecified",
     ):
+        # Provenance belongs only to the fully validated returned reuse batch and
+        # is consumed even if publication fails or a different batch is supplied.
+        signature = (
+            package.package_id,
+            experiment_id,
+            arm,
+            parser_fingerprint,
+            digest(result.model_dump(mode="json")),
+        )
+        reuse_sources = self._reuse_sources if signature == self._reuse_signature else {}
+        self._reuse_sources = {}
+        self._reuse_signature = None
         self.retain_package(package, index)
         expected = {u.unit_id: u for u in prepare_units(package)}
         errors, valid = [], []
@@ -326,7 +351,7 @@ class Store:
                                 parser_fingerprint,
                                 Jsonb(unit.model_dump(mode="json")),
                                 Jsonb([c.capture_id for c in cs]),
-                                self._reuse_sources.get((package.package_id, unit.unit_id, key)),
+                                reuse_sources.get((package.package_id, unit.unit_id, key)),
                             ),
                         )
                         for offer in unit.offers:

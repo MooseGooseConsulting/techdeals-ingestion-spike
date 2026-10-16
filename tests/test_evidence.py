@@ -106,3 +106,21 @@ def test_html_aliases_are_short_and_traversable(tmp_path):
         == "html:@2"
     )
     assert 'hidden="yes"' in index.resolve(EvidenceRef(capture_id="h", locator="html:@51"))
+
+
+def test_changed_capture_cannot_claim_the_original_manifest_hash(tmp_path):
+    import hashlib
+
+    source = tmp_path / "capture"
+    source.write_bytes(b"original")
+    capture = CaptureInput(
+        capture_id="capture",
+        acquisition_key="capture",
+        path=source,
+        media_type="text/plain",
+        metadata={"sha256": hashlib.sha256(b"original").hexdigest()},
+    )
+    assert EvidenceIndex([capture]).originals["capture"] == b"original"
+    source.write_bytes(b"modified")
+    with pytest.raises(ValueError, match="declared checksum"):
+        EvidenceIndex([capture])

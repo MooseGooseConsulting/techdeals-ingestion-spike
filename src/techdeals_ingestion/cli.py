@@ -153,7 +153,8 @@ async def run_package(args):
         report["database_rows"] = len(rows)
         report["status"] = (
             "completed_with_failures"
-            if any(u.status == "failed" for u in result.units) or report["publication"]["errors"]
+            if any(u.status in ("failed", "partial") for u in result.units)
+            or report["publication"]["errors"]
             else "completed"
         )
     except (ValueError, KeyError, OSError, RuntimeError, APIError, HTTPError, DatabaseError) as exc:

@@ -576,3 +576,93 @@ def test_no_offer_outcome_is_queryable_without_a_listing(store, tmp_path):
     assert rows[0]["observed_at"] == capture.retrieved_at
     assert rows[0]["input_capture_ids"] == [token]
     assert not store.query("ingestion_failures", experiment_id=token)
+
+
+def test_package_reuse_provenance_is_atomic_and_consumed(store, tmp_path):
+    token = uuid4().hex
+    paths = []
+    for name in ("first", "second"):
+        path = tmp_path / name
+        path.write_text(name + " offer")
+        paths.append(path)
+
+    def package(suffix, count):
+        return WorkPackage(
+            package_id=token + suffix,
+            captures=[
+                CaptureInput(
+                    capture_id=token + suffix + str(i),
+                    acquisition_key=token + suffix + str(i),
+                    path=paths[i],
+                    media_type="text/plain",
+                )
+                for i in range(count)
+            ],
+        )
+
+    def fresh(package, suffix):
+        return ParseBatchResult(
+            batch_id=token + suffix,
+            units=[
+                UnitResult(
+                    unit_id=c.capture_id,
+                    status="complete",
+                    input_refs=[EvidenceRef(capture_id=c.capture_id, locator="$")],
+                    offers=[
+                        Offer(
+                            local_id="offer",
+                            title=c.path.read_text(),
+                            evidence=[EvidenceRef(capture_id=c.capture_id, locator="$")],
+                        )
+                    ],
+                )
+                for c in package.captures
+            ],
+        )
+
+    def publish(package, result, suffix):
+        store.publish(
+            package,
+            result,
+            EvidenceIndex(package.captures),
+            token,
+            "a",
+            token + suffix,
+            parser_fingerprint="v1",
+        )
+        with store.connect() as conn:
+            return conn.execute(
+                "SELECT result_id,reused_from FROM interpretations "
+                "WHERE attempt_key=%s ORDER BY unit_id",
+                (token + suffix,),
+            ).fetchall()
+
+    seed = package("seed", 1)
+    publish(seed, fresh(seed, "seed"), "seed")
+    mixed = package("mixed", 2)
+    assert store.reuse(mixed, EvidenceIndex(mixed.captures), token, "a", "v1") is None
+    rows = publish(mixed, fresh(mixed, "fresh"), "fresh")
+    assert len(rows) == 2 and all(row["reused_from"] is None for row in rows)
+
+    complete = package("complete", 2)
+    reused = store.reuse(complete, EvidenceIndex(complete.captures), token, "a", "v1")
+    assert reused is not None
+    assert reused.batch_id == complete.package_id
+    reused.batch_id = complete.package_id  # CLI normalizes this before publication.
+    reused_rows = publish(complete, reused, "reused")
+    assert len(reused_rows) == 2 and all(row["reused_from"] for row in reused_rows)
+    with store.connect() as conn:
+        links = conn.execute(
+            "SELECT child.semantic_key=source.semantic_key AS compatible "
+            "FROM interpretations child JOIN interpretations source "
+            "ON source.result_id=child.reused_from WHERE child.attempt_key=%s",
+            (token + "reused",),
+        ).fetchall()
+    assert len(links) == 2 and all(row["compatible"] for row in links)
+    # A fresh batch after a successful reuse lookup must not inherit that lookup.
+    assert store.reuse(complete, EvidenceIndex(complete.captures), token, "a", "v1") is not None
+    rows = publish(complete, fresh(complete, "replacement"), "replacement")
+    assert len(rows) == 2 and all(row["reused_from"] is None for row in rows)
+    # The earlier successful batch is also one-shot, after another publish consumes state.
+    rows = publish(complete, reused, "again")
+    assert len(rows) == 2 and all(row["reused_from"] is None for row in rows)

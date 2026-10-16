@@ -134,3 +134,71 @@ def test_trial_sql_excludes_older_observation_with_same_unit(tmp_path):
     rows, prices = cli.trial_rows(store, experiment + "2", experiment, "test")
     assert [row["title"] for row in rows] == ["Item 2"]
     assert [price["amount"] for price in prices] == [Decimal(2)]
+
+
+async def test_published_partial_unit_is_reported_as_incomplete(tmp_path, monkeypatch):
+    from contextlib import asynccontextmanager, nullcontext
+
+    from techdeals_ingestion import extraction
+    from techdeals_ingestion.contracts import EvidenceRef, Offer, ParseBatchResult, UnitResult
+
+    source = tmp_path / "source"
+    source.write_text("Item, price unavailable")
+    package = WorkPackage(
+        package_id="p",
+        captures=[
+            CaptureInput(
+                capture_id="item",
+                acquisition_key="item",
+                path=source,
+                media_type="text/plain",
+            )
+        ],
+    )
+    ref = EvidenceRef(capture_id="item", locator="$")
+    result = ParseBatchResult(
+        batch_id="p",
+        units=[
+            UnitResult(
+                unit_id="item",
+                input_refs=[ref],
+                status="partial",
+                issues=["Price unavailable"],
+                offers=[Offer(local_id="offer", title="Item", evidence=[ref])],
+            )
+        ],
+    )
+
+    async def parse(*args):
+        return result
+
+    @asynccontextmanager
+    async def session(*args):
+        yield SimpleNamespace(stats=dict)
+
+    connection = SimpleNamespace(execute=lambda *a: SimpleNamespace(fetchall=list))
+    store = SimpleNamespace(
+        retain_package=lambda p: None,
+        publish=lambda *a, **kw: {"published_units": 1, "errors": []},
+        connect=lambda: nullcontext(connection),
+        query=lambda *a, **kw: [],
+    )
+    monkeypatch.setattr(cli, "_store", lambda: store)
+    monkeypatch.setattr(cli, "load_work_packages", lambda p: [package])
+    monkeypatch.setattr(cli, "LLMRun", session)
+    monkeypatch.setattr(extraction, "parse_direct", parse)
+    args = SimpleNamespace(
+        manifest="unused",
+        config="config/parser.toml",
+        package="p",
+        arm="staged",
+        experiment="partial",
+        output=str(tmp_path / "trial"),
+        fresh=True,
+        direct=True,
+        attempt="partial-attempt",
+    )
+    assert await cli.run_package(args) == 1
+    summary = json.loads((tmp_path / "trial/summary.json").read_text())
+    assert summary["publication"] == {"published_units": 1, "errors": []}
+    assert summary["status"] == "completed_with_failures"

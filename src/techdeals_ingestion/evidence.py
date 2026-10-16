@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import xml.etree.ElementTree as ET
@@ -71,6 +72,11 @@ class EvidenceIndex:
         self.children: dict[tuple[str, str], list[str]] = {}
         for capture in captures:
             raw = capture.path.read_bytes()
+            expected = capture.metadata.get("sha256")
+            if expected is not None and hashlib.sha256(raw).hexdigest() != expected:
+                raise ValueError(
+                    f"Capture does not match its declared checksum: {capture.capture_id}"
+                )
             self.originals[capture.capture_id] = raw
             text = raw.decode("utf-8", errors="replace")
             nodes = self.nodes[capture.capture_id] = {"$": text}
