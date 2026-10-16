@@ -1,7 +1,7 @@
 """Run or review a TechDeals DSPy RLM extraction without telemetry services.
 
 Examples:
-  uv run --with 'dspy==3.4.1' python scripts/review_rlm.py run --ids spd --out .runs/rlm-spd
+  uv run --with 'dspy[deno]==3.4.1' python scripts/review_rlm.py run --ids spd --out .runs/rlm-spd
   uv run python scripts/review_rlm.py review .runs/rlm-spd
 """
 
