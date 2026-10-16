@@ -162,6 +162,45 @@ Ingestion should:
 5. Apply the listing identity and rescrape rules below before publishing the
    information for agent queries.
 
+## Initial parser output target
+
+The parser needs a provisional structured-output schema before the first model
+call. The target is extracted information from the supplied content, checked
+against varied real inputs. It is not the final database schema or a complete
+hardware taxonomy. The following is the proposed minimum shape; exact field
+definitions and example records come from inspection of the initial captures.
+
+| Part of the output | Information to represent |
+|---|---|
+| Input references | Which supplied captures and entries support the result; native source IDs and URLs when present |
+| Items or variants | An array of extracted entries, with title/description, their source grouping, and any explicit variant distinctions |
+| Common item fields | Seller, location, condition, and availability, preserving original values and explicit unknowns |
+| Prices | An array of amounts with currency, original text, stated kind such as ask or bid, which entry/configuration each amount describes, and supporting source references |
+| Attributes | Additional specifications and source fields with their original names/values, normalized values and units where justified, and supporting references; different hardware types can have different attributes |
+| Source dates | Dates stated in the supplied content, with their meaning, original text, and source references; unresolved meanings remain explicit |
+| Unresolved information | Ambiguous fields or associations, conflicts, and entries that could not be interpreted, retaining the relevant evidence |
+
+The result can contain zero, one, or many extracted entries. An empty item
+array needs a disposition, such as no offer present or interpretation failed;
+it must not silently count as a successful ingestion. A component mentioned
+inside a system must not become a separately priced offer unless the source
+supports that interpretation. Prices can remain associated with a source group
+when their scope cannot be narrowed reliably.
+
+Collection identity and known retrieval times enter with the input metadata.
+Import/parse times and parser version are recorded by the program. Carry these
+alongside the model result rather than asking the model to generate them.
+Returned references must resolve to supplied evidence. Database keys and
+listing merges are assigned by the persistence code using established identity
+evidence; a model-generated identifier does not establish listing identity.
+
+The first parser executable writes the input context and structured results to
+inspectable files. Compare those results with the independently inspected
+records before settling the database tables. Refine the output schema when a
+real input cannot be represented faithfully. Keep the existing requirements for
+dates, identity, and history in view during this experiment so that information
+needed for persistence is retained from the start.
+
 ## Where LLM parsing fits
 
 The shared LLM-backed parser is the main proposed solution to varied source

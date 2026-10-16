@@ -23,12 +23,12 @@ requirement.
 
 | Problem | Where this plan addresses it | What must be demonstrated |
 |---|---|---|
-| [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–4; broader information extension | Several structurally different inputs, including one-to-many and many-to-one cases, become useful query results through the same path |
-| [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–5 | Data retrieved by agents preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
+| [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–6; broader information extension | Several structurally different inputs, including one-to-many and many-to-one cases, become useful query results through the same path |
+| [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–6 | Data retrieved by agents preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
 | [P3: price scope and cost apportionment](problems.md#p3-what-prices-cover-and-how-costs-are-apportioned) | First deliverable for stated purchase prices; cost apportionment extension for attributed costs | Amounts cover the correct purchases; justified allocations remain separately identified and traceable |
-| [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–5; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
+| [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–6; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
 | [P5: source evidence, dates, and history](problems.md#p5-source-evidence-dates-and-history) | First deliverable, including the [data contract](data-contract.md#listing-identity-and-repeated-scrapes); broader continuity cases afterward | Ordinary queries deduplicate source listings; dated sightings, actual changes, and revised interpretations remain distinguishable |
-| [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–5; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
+| [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–6; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
 | [P7: developing categories](problems.md#p7-categories-that-develop-with-the-information) | Broader information and categories extension | New meaningful categories can be represented and queried with their relevant attributes and relationships |
 
 All seven problems remain open. The sequence below is proposed. The initial
@@ -71,6 +71,12 @@ The central hypothesis is that a good shared LLM parser can turn this varied
 content into useful records. The initial shapes below are evidence for testing
 that parser, not separate source-parser implementation projects. Generic input
 reading, validation, and database bookkeeping support it.
+
+Build order: inspect varied captures and expected results, define a provisional
+parser output schema, build and inspect the batch parser, then implement the
+database representation and verify agent reads. Parser output files are an
+intermediate experiment; the first working delivery still includes PostgreSQL,
+history, deduplication, and usable agent queries.
 
 1. **Assemble and inspect the initial inputs before designing the parser or
    schema.** Cover each [initial structural case](data-contract.md#different-input-shapes-through-the-same-path):
@@ -125,35 +131,54 @@ reading, validation, and database bookkeeping support it.
    those meanings survive. Example queries demonstrate access; they do not limit
    the database to a fixed list of questions.
 
-3. **Choose the smallest representation and tools for the varied inputs.** Check
-   the required records and relationships against all the examples, then implement
-   them. Do not begin with the previous tables or recreate its module tree.
-   Use PostgreSQL on an isolated branch of an existing Neon project. Python
-   and Instructor are proposed starting tools for batched extraction; first
+3. **Define the provisional parser output schema.** Use the
+   [initial output target](data-contract.md#initial-parser-output-target) and the
+   inspected expected records to define the structured result accepted from
+   the model. Cover common item fields, multiple prices and their scopes,
+   extensible attributes, source dates, evidence references, and explicit
+   unresolved information. Preserve one-to-many and many-to-one associations.
+   Keep trusted collection metadata supplied by the program alongside the
+   result. Define the output from all initial shapes together; the database
+   schema remains provisional until the parser results have been inspected.
+
+   Done when the expected records fit the output structure without invented
+   facts, lost information, or a fixed hardware taxonomy.
+
+4. **Build the shared batch parser first.** Python and Instructor are proposed
+   starting tools for batched extraction; first
    check compatibility with the selected free endpoint and its output mode.
    Keep this choice explicit in the implementation PR. Add dependencies only
-   for work this slice actually needs. A TimescaleDB extension remains a
+   for work this experiment actually needs. A documented executable reads the
+   selected saved captures, prepares batches, and writes structured results with
+   their input context and evidence references to inspectable files. Run varied
+   development inputs together, including partial or failed interpretations.
+   Check that every expected item and price survives and remains correctly
+   associated. Preserve dates and unknowns; validate input references and
+   established structured values. Refine the output schema against actual
+   failures before settling database tables.
+
+   Done when the executable runs with the selected free endpoint in batches,
+   and inspected development results establish the intended extraction behavior
+   across the initial shapes. A successful request or valid JSON alone is not
+   completion. Unfamiliar-source behavior is checked with the frozen set below.
+
+5. **Add persistence and run the complete path.** Choose the smallest database
+   representation that preserves the inspected parser results, original
+   evidence, and required date/identity/history behavior. Do not begin with the
+   previous tables or recreate its module tree. Use PostgreSQL on an isolated
+   branch of an existing Neon project. A TimescaleDB extension remains a
    separate workload decision; time-series requirements do not depend on it.
-
-   Done when every stored field has a concrete purpose in agent consumption or in
-   retaining their source evidence, and the chosen model request works in a batch.
-
-4. **Build and run the complete path.** A documented batch ingestion entry point
-   preserves the selected saved captures and prepares them with general format
-   readers. Supply their source references, shared context, and known collection
-   metadata to the shared parser. Use batched free-model requests to identify
-   items and their information across layouts, retaining explicit structured
-   values and returning a common record structure with evidence references.
-   Validate the returned information and store it with the source evidence in
-   the database queried by other agents. Preserve usable structured source
-   information with its provenance. Document the
-   tables/views, field meanings, units, relationships, time semantics, and unknown
+   Every stored field needs a concrete purpose in agent consumption or retaining
+   source evidence. Extend the same batch entry point to store the validated
+   information with its evidence. Preserve usable structured source
+   information with its provenance. Document the tables/views, field meanings,
+   units, relationships, time semantics, and unknown
    states needed by a consuming agent. The path must work from a clean checkout
    with documented setup. Exercise all initial shapes in the same run, including
    multiple records from one payload and one listing supported by multiple
    payloads. Keep the batch result associated with its input even when outputs
-   arrive out of order. Preserve explicit failures
-   and usable partial information. Evidence with an unknown original fetch time
+   arrive out of order. Preserve explicit failures and usable partial
+   information. Evidence with an unknown original fetch time
    must remain retrievable without inventing a dated price or stock observation.
    Retain unmapped or failed entries with an explicit disposition. A new shape
    must not silently lose records or require guesses to fit the representation.
@@ -165,7 +190,7 @@ reading, validation, and database bookkeeping support it.
    results match the inspected source meaning, including the excluded matches,
    and the [data contract's rescrape cases](data-contract.md#listing-identity-and-repeated-scrapes) behave as specified.
 
-5. **Verify consumption through agent queries.** Use the documented database
+6. **Verify consumption through agent queries.** Use the documented database
    structure to retrieve and relate the stored information, including quantities,
    price coverage, source evidence, and unknowns. Trace the retrieved information
    back to the captures and interpretation. Fix discrepancies across parsing,
