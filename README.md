@@ -8,7 +8,8 @@ This is a fresh implementation repository. The owner requested it after the
 previous work failed to demonstrate the useful application they expected.
 Existing TechDeals implementations are not the starting architecture here.
 
-Read the [implementation plan](docs/plan.md) before building. Its first milestone
+Start with the [problems and required outcomes](docs/problems.md), then read the
+[implementation plan](docs/plan.md). Its proposed first milestone
 is one working path from a small, varied set of real captures through batched
 free-model interpretation and database storage to useful query answers.
 
