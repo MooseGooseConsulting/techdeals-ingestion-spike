@@ -6,12 +6,19 @@ discussed with the owner. It is not a claim that they have been solved.
 ## Purpose
 
 We have heterogeneous hardware information that needs to become useful for
-sorting, querying, tallying, and buying analysis.
+sorting, querying, tallying, and buying analysis by other agents.
 
 The difficult part is preserving its meaning from the original source through
-to the answer returned by the application. The intended result is a functioning
-ingestion and query application whose demonstrated improvements can enhance
+to the data retrieved by a consuming agent. The intended result is a functioning
+ingestion pipeline and database whose demonstrated improvements can enhance
 the main TechDeals project.
+
+Other agents are the database consumers. They need queryable facts,
+relationships, quantities, price scope, provenance, history, and explicit
+unknowns to support their own tasks. The owner is not expected to query the
+database personally. A fixed menu of human-facing buying questions does not
+define the scope. The data must be understandable from its documented structure
+and meanings without depending on the ingestion agent's conversation history.
 
 The [implementation plan](plan.md) describes how we propose to address these
 problems. Its sequence and technical choices can change as we learn; the
@@ -23,8 +30,8 @@ A standalone part, a configured server, a lot, and a multi-item sale post
 describe hardware and purchases differently. Flattening them into the same
 record can erase the differences needed to understand or compare them.
 
-**Required result:** useful information from these different structures can be
-retrieved, sorted, queried, and tallied together while retaining the context
+**Required result:** other agents can retrieve, sort, query, and tally useful
+information from these different structures together while retaining the context
 that determines what each item and purchase means. This must work across varied
 real source and hardware shapes; one server family cannot establish that.
 
@@ -39,9 +46,10 @@ Counts and units can also change meaning during interpretation: six 600GB
 drives are six drives of 600GB each, with 3600GB aggregate capacity. Supported
 memory capacity is not installed memory. Different adapters must remain distinct.
 
-**Required result:** the application can explain what a purchase includes, each
-component's attributes and quantity, what is absent or optional, and which items
-can actually be bought separately. These meanings survive storage and querying.
+**Required result:** stored facts and relationships identify what a purchase
+includes, each component's attributes and quantity, what is absent or optional,
+and which items can actually be bought separately. A consuming agent can query
+these distinctions without reconstructing them from the raw listing each time.
 
 ## P3. What prices cover and how costs are apportioned
 
@@ -64,11 +72,12 @@ costs remain distinguishable from stated market prices.
 
 Similar names, a shared chassis, or a shared CPU do not establish equivalent
 configurations. Missing discriminating facts can make a plausible match
-misleading. The attributes that matter depend on the hardware and buying question.
+misleading. The attributes that matter depend on the hardware and the consuming
+agent's task.
 
-**Required result:** a query can find purchases satisfying a stated requirement
-and exclude misleading near matches. It preserves differences in installed
-configuration, condition, purchase quantity, and other relevant constraints.
+**Required result:** consuming agents can query purchases against their own
+requirements and exclude misleading near matches. The data preserves differences
+in installed configuration, condition, purchase quantity, and other relevant constraints.
 Incomplete identity remains explicit rather than becoming a guessed match.
 
 ## P5. Source evidence, dates, and history
@@ -77,11 +86,11 @@ Every selected fact or price needs a traceable source. Fetch time, publication
 time, import time, and the time a price was observed describe different events.
 Reinterpreting a capture is also different from observing a real market change.
 
-**Required result:** the application exposes the supporting source and known
+**Required result:** agent queries expose the supporting source and known
 time context. Missing dates stay unknown. Repeated captures and revised
 interpretations preserve price and availability history without duplicating
-purchases or attaching old prices to different components. Users can distinguish
-historical evidence, current observations, and unavailable or unknown inventory.
+purchases or attaching old prices to different components. Consuming agents can
+distinguish historical evidence, current observations, and unavailable or unknown inventory.
 
 ## P6. Useful incomplete information and visible failures
 
@@ -91,8 +100,8 @@ disappear. A successful model request does not establish a usable interpretation
 
 **Required result:** original evidence and useful partial interpretations remain
 retrievable. Unknowns, conflicts, failures, and exclusions have explicit
-dispositions. The application can show what it knows and the limits on using
-it; no missing fact is silently invented to make a record fit.
+dispositions. Consuming agents can retrieve known information and the limits on
+using it; no missing fact is silently invented to make a record fit.
 
 ## P7. Categories that develop with the information
 
@@ -102,7 +111,7 @@ from being represented or queried.
 
 **Required result:** new hardware and meaningful categories can be organized and
 queried while preserving their relevant attributes and relationships. The
-application supports category-specific requirements without assuming a legacy
+database supports category-specific requirements without assuming a legacy
 schema or forcing unlike configurations into the same comparison.
 
 ## Working boundaries
