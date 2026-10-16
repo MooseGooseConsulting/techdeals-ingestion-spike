@@ -135,9 +135,18 @@ def offer_keys(entries: list[dict]) -> Counter:
     for entry in entries:
         for price in entry.get("prices", []):
             if price.get("amount") is not None and price.get("kind") not in {
-                "shipping", "previous_price", "buyer_budget", "all_in_estimate",
+                "shipping",
+                "previous_price",
+                "buyer_budget",
+                "all_in_estimate",
             }:
-                keys[(str(entry.get("native_id")), str(entry.get("variant_id")), _price(price["amount"]))] += 1
+                keys[
+                    (
+                        str(entry.get("native_id")),
+                        str(entry.get("variant_id")),
+                        _price(price["amount"]),
+                    )
+                ] += 1
     return keys
 
 
@@ -351,26 +360,57 @@ def _session_id(events: Path) -> str | None:
     return None
 
 
-def _agent_turn(workspace: Path, model: str, prompt: str, logs: Path,
-                session: str | None, executable: str, timeout: int) -> tuple[int, str | None]:
+def _agent_turn(
+    workspace: Path,
+    model: str,
+    prompt: str,
+    logs: Path,
+    session: str | None,
+    executable: str,
+    timeout: int,
+) -> tuple[int, str | None]:
     logs.mkdir(exist_ok=True)
-    cmd = [executable, "--pure", "run", "--format", "json", "--dir", str(workspace),
-           "--model", model, "--agent", "build", "--auto"]
+    cmd = [
+        executable,
+        "--pure",
+        "run",
+        "--format",
+        "json",
+        "--dir",
+        str(workspace),
+        "--model",
+        model,
+        "--agent",
+        "build",
+        "--auto",
+    ]
     if session:
         cmd += ["--session", session]
     cmd.append(prompt)
     env = _runtime_env(inference=True)
-    env["OPENCODE_CONFIG_CONTENT"] = json.dumps({
-        "model": model,
-        "small_model": model,
-        "permission": {"edit": "allow", "bash": "allow", "read": "allow",
-                       "external_directory": "deny"},
-    })
+    env["OPENCODE_CONFIG_CONTENT"] = json.dumps(
+        {
+            "model": model,
+            "small_model": model,
+            "permission": {
+                "edit": "allow",
+                "bash": "allow",
+                "read": "allow",
+                "external_directory": "deny",
+            },
+        }
+    )
     events = logs / "events.jsonl"
     err = logs / "stderr.log"
     with events.open("wb") as stdout, err.open("wb") as stderr:
-        proc = subprocess.Popen(cmd, cwd=workspace, stdout=stdout, stderr=stderr,
-                                env=env, start_new_session=(os.name == "posix"))
+        proc = subprocess.Popen(
+            cmd,
+            cwd=workspace,
+            stdout=stdout,
+            stderr=stderr,
+            env=env,
+            start_new_session=(os.name == "posix"),
+        )
         try:
             code = proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -414,12 +454,25 @@ def run(
                 + json.dumps(report.get("errors", []), indent=2)
             )
         (workspace / f"prompt-{round_no:02d}.txt").write_text(prompt)
-        code, session = _agent_turn(workspace, model, prompt, workspace / f"agent-{round_no:02d}",
-                                    session, executable, timeout)
+        code, session = _agent_turn(
+            workspace,
+            model,
+            prompt,
+            workspace / f"agent-{round_no:02d}",
+            session,
+            executable,
+            timeout,
+        )
         report = evaluate(workspace, timeout=extractor_timeout)
         _save(workspace / f"evaluation-{round_no:02d}.json", report)
-        summary["rounds"].append({"round": round_no, "agent_exit": code,
-                                  "passed": report["passed"], "errors": report.get("errors", [])})
+        summary["rounds"].append(
+            {
+                "round": round_no,
+                "agent_exit": code,
+                "passed": report["passed"],
+                "errors": report.get("errors", []),
+            }
+        )
         summary["session"] = session
         _save(workspace / "run-summary.json", summary)
         if code != 0 and not session:
