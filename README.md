@@ -42,8 +42,11 @@ The initial full development attempts failed before producing usable rows. The
 current first gate is deliberately smaller: **two complete native records,
 11,584 bytes total, sent together in one extraction request**, followed by field
 inspection and actual Neon reads. Discovery and tool loops are bypassed for this
-gate. Six live SQL checks established the persistence behavior, while useful
-extraction still requires its own source comparison.
+gate. Live SQL checks established the tested persistence behavior. The first
+Lightning call returned after about 599 seconds, but both records failed
+price-scope validation and zero accepted records were published. Useful extraction
+and a field-by-field source comparison remain unproven; the implementation is a
+work-in-progress snapshot.
 
 From a clean checkout, run `uv sync --locked`. Inspect evidence without credentials:
 

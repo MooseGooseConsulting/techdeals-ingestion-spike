@@ -32,6 +32,12 @@ Only after this small path produces useful, inspected records should the larger
 A/B development packages or held-back comparison run. The existing experimental
 candidate implementations do not constitute proof of that broader behavior.
 
+The first direct Lightning run returned two record outputs after about 599 seconds.
+Both failed price-scope validation, and no accepted records were published. This
+gate remains incomplete. Before expanding, simplify the extraction around named,
+typed core fields and PydanticAI's output-validator correction flow; the current
+generic fact dictionaries and manual correction loops require revision.
+
 The earlier development attempts exposed two concrete failures: full-body layout
 discovery exhausted 600 seconds before extraction, and serial root paging exhausted
 twelve tool requests before final output. Their retained transcripts are evidence

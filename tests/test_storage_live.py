@@ -379,3 +379,75 @@ def test_equal_time_conflicts_and_selected_reuse(store, tmp_path):
         parser_fingerprint="v1",
     )
     assert store.reuse(p, EvidenceIndex(p.captures), token, "a", "v1") is None
+
+
+def test_source_date_only_changes_and_equal_time_conflicts(store, tmp_path):
+    from techdeals_ingestion.contracts import SourceDate
+
+    token = uuid4().hex
+
+    def publish_date(number, observed_day, end_day):
+        cid = token + str(number)
+        path = tmp_path / cid
+        path.write_text(f"Auction end 2026-10-{end_day}")
+        capture = CaptureInput(
+            capture_id=cid,
+            acquisition_key=cid,
+            path=path,
+            media_type="text/plain",
+            source_namespace="test",
+            retrieved_at=datetime(2026, 10, observed_day, tzinfo=UTC),
+            metadata={"identity_bindings": {"$": {"confirmed": True, "native_id": token}}},
+        )
+        ref = EvidenceRef(capture_id=cid, locator="$")
+        result = ParseBatchResult(
+            batch_id=cid,
+            units=[
+                UnitResult(
+                    unit_id=cid,
+                    input_refs=[ref],
+                    status="complete",
+                    offers=[
+                        Offer(
+                            local_id="offer",
+                            title="Auction",
+                            evidence=[ref],
+                            source_dates=[
+                                SourceDate(
+                                    original_field="auction_end",
+                                    value=f"2026-10-{end_day}",
+                                    meaning="auction end",
+                                    evidence=[ref],
+                                )
+                            ],
+                            prices=[
+                                Price(
+                                    local_id="price",
+                                    amount=Decimal(42),
+                                    kind="current_bid",
+                                    scope_refs=["offer"],
+                                    evidence=[ref],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+        store.publish(
+            WorkPackage(package_id=cid, captures=[capture]),
+            result,
+            EvidenceIndex([capture]),
+            token,
+            "dates",
+            cid,
+            parser_fingerprint="date-test",
+        )
+
+    publish_date(1, 1, 20)
+    publish_date(2, 2, 21)
+    assert len(store.query("listing_changes", experiment_id=token, arm="dates")) == 2
+    publish_date(3, 2, 22)
+    current = store.query("current_listings", experiment_id=token, arm="dates")
+    assert len(current) == 2 and all(row["equal_time_conflict"] for row in current)
+    assert len(store.query("listing_changes", experiment_id=token, arm="dates")) == 1
