@@ -96,17 +96,19 @@ def prepare(root: Path, case: str, dest: Path) -> dict:
             raise ValueError(f"Fixture checksum mismatch: {capture_id}")
         target = dest / "inputs" / f"{capture_id}{source.suffix}"
         target.write_bytes(raw)
-        selected.append({
-            "input_id": capture_id,
-            "path": str(target.relative_to(dest)),
-            "media_type": record.get("media_type", "application/octet-stream"),
-            "namespace": record.get("source_namespace"),
-            "linked_group": record.get("linked_group"),
-            "acquisition_key": record.get("acquisition_key"),
-            "url": record.get("url"),
-            "retrieved_at": (record.get("metadata") or {}).get("retrieved_at"),
-            "sha256": digest,
-        })
+        selected.append(
+            {
+                "input_id": capture_id,
+                "path": str(target.relative_to(dest)),
+                "media_type": record.get("media_type", "application/octet-stream"),
+                "namespace": record.get("source_namespace"),
+                "linked_group": record.get("linked_group"),
+                "acquisition_key": record.get("acquisition_key"),
+                "url": record.get("url"),
+                "retrieved_at": (record.get("metadata") or {}).get("retrieved_at"),
+                "sha256": digest,
+            }
+        )
     _save(dest / "captures.json", {"case": case, "captures": selected})
     # This schema is the *existing* application contract, not an invented one.
     sys.path.insert(0, str(root / "src"))
@@ -187,10 +189,24 @@ def compare(extraction: dict, oracle: dict, case: str) -> dict:
 def _runtime_env(*, inference: bool = False) -> dict[str, str]:
     """Only pass ordinary runtime settings, never database or unrelated API keys."""
     exact = {
-        "PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL", "TERM", "TMPDIR",
-        "VIRTUAL_ENV", "PYTHONPATH", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
-        "XDG_CACHE_HOME", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE",
-        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+        "PATH",
+        "HOME",
+        "USER",
+        "SHELL",
+        "LANG",
+        "LC_ALL",
+        "TERM",
+        "TMPDIR",
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
     }
     result = {k: v for k, v in os.environ.items() if k in exact or k.startswith("UV_")}
     if inference and os.environ.get("OPENROUTER_API_KEY"):
@@ -204,8 +220,15 @@ def _execute(workspace: Path, manifest: Path, output: Path, timeout: int) -> dic
         return {"returncode": 127, "stderr": "Agent did not create extractor.py"}
     cmd = [sys.executable, str(script), "--manifest", str(manifest), "--output", str(output)]
     try:
-        p = subprocess.run(cmd, cwd=workspace, text=True, capture_output=True, timeout=timeout,
-                           env=_runtime_env(), check=False)
+        p = subprocess.run(
+            cmd,
+            cwd=workspace,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            env=_runtime_env(),
+            check=False,
+        )
         return {"returncode": p.returncode, "stdout": p.stdout[-6000:], "stderr": p.stderr[-6000:]}
     except subprocess.TimeoutExpired:
         return {"returncode": 124, "stderr": f"Extractor exceeded {timeout}s"}
@@ -231,8 +254,10 @@ def _mutation(workspace: Path, case: str, directory: Path) -> tuple[Path, dict] 
             cloned["variants"][0]["product_id"] = cloned["id"]
             cloned["variants"][0]["price"] = "36.58"
             raw["products"].append(cloned)
-            expected = {"changed": (str(first["id"]), str(first["variants"][0]["id"]), "17.37"),
-                        "added": (str(cloned["id"]), str(cloned["variants"][0]["id"]), "36.58")}
+            expected = {
+                "changed": (str(first["id"]), str(first["variants"][0]["id"]), "17.37"),
+                "added": (str(cloned["id"]), str(cloned["variants"][0]["id"]), "36.58"),
+            }
         elif case == "ebay":
             for group in raw.get("variants", []):
                 for option in group.get("variant_options", []):
@@ -272,11 +297,17 @@ def evaluate(workspace: Path, *, timeout: int = 90, mutation: bool = True) -> di
 
         typed = Extraction.model_validate(data)
         fixture = json.loads((workspace / "captures.json").read_text())
-        sources = [Source(
-            input_id=s["input_id"], acquisition_key=s.get("acquisition_key") or s["input_id"],
-            content=(workspace / s["path"]).read_bytes(), media_type=s["media_type"],
-            namespace=s.get("namespace"), linked_group=s.get("linked_group"),
-        ) for s in fixture["captures"]]
+        sources = [
+            Source(
+                input_id=s["input_id"],
+                acquisition_key=s.get("acquisition_key") or s["input_id"],
+                content=(workspace / s["path"]).read_bytes(),
+                media_type=s["media_type"],
+                namespace=s.get("namespace"),
+                linked_group=s.get("linked_group"),
+            )
+            for s in fixture["captures"]
+        ]
         errors = _validate_output(typed, sources)
         report["contract_errors"] = errors
         comparison = compare(typed.model_dump(mode="json"), oracle, case)
@@ -352,8 +383,15 @@ def _agent_turn(workspace: Path, model: str, prompt: str, logs: Path,
     return code, _session_id(events) or session
 
 
-def run(workspace: Path, model: str, executable: str, *, rounds: int = 3,
-        timeout: int = 900, extractor_timeout: int = 90) -> dict:
+def run(
+    workspace: Path,
+    model: str,
+    executable: str,
+    *,
+    rounds: int = 3,
+    timeout: int = 900,
+    extractor_timeout: int = 90,
+) -> dict:
     workspace = workspace.resolve()
     if not model.endswith(":free"):
         raise ValueError("Refusing unverified paid model; explicitly select an :free model")
@@ -397,9 +435,15 @@ def run(workspace: Path, model: str, executable: str, *, rounds: int = 3,
         summary["status"] = "failed"
     if session:
         try:
-            export = subprocess.run([executable, "export", "--sanitize", session],
-                                    cwd=workspace, text=True, capture_output=True, timeout=40,
-                                    env=_runtime_env(inference=True), check=False)
+            export = subprocess.run(
+                [executable, "export", "--sanitize", session],
+                cwd=workspace,
+                text=True,
+                capture_output=True,
+                timeout=40,
+                env=_runtime_env(inference=True),
+                check=False,
+            )
             if export.returncode == 0:
                 (workspace / "opencode-session.json").write_text(export.stdout)
             else:
@@ -436,8 +480,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report["passed"] else 1
     if args.rounds < 1 or args.timeout < 1:
         parser.error("rounds and timeout must be positive")
-    summary = run(args.workspace, args.model, args.opencode, rounds=args.rounds,
-                  timeout=args.timeout)
+    summary = run(
+        args.workspace, args.model, args.opencode, rounds=args.rounds, timeout=args.timeout
+    )
     print(json.dumps(summary, indent=2))
     return 0 if summary["status"] == "passed" else 1
 
