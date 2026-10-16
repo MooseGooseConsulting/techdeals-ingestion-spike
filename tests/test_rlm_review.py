@@ -11,9 +11,9 @@ class FakeLM:
         self.history = history
 
     def inspect_history(self, n, file):
-        file.write(f"Model calls: {n}\\n")
+        file.write(f"Model calls: {n}\n")
         for call in self.history[-n:]:
-            file.write(str(call) + "\\n")
+            file.write(str(call) + "\n")
 
 
 def test_complete_run_saves_reviewable_prompts_and_code(tmp_path):
