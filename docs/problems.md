@@ -1,7 +1,8 @@
 # Problems this project must solve
 
-Status: draft, 2026-10-16. This records the problems and required behavior
-discussed with the owner. It is not a claim that they have been solved.
+Status: draft, 2026-10-16. This records the confirmed project purpose and
+candidate behaviors for design review. Detailed modeling choices below are
+proposals where noted, not approved implementation requirements.
 
 ## Purpose
 
@@ -18,17 +19,21 @@ to the data retrieved by a consuming agent. The intended result is a functioning
 ingestion pipeline and database whose demonstrated improvements can enhance
 the main TechDeals project.
 
-Other agents are the database consumers. They need queryable facts,
-relationships, quantities, price scope, provenance, history, and explicit
-unknowns to support their own tasks. The owner is not expected to query the
-database personally. A fixed menu of human-facing buying questions does not
-define the scope. The data must be understandable from its documented structure
-and meanings without depending on the ingestion agent's conversation history.
+Other agents are the database consumers. They need queryable scraped facts,
+their source and time context, and a clear account of unknown or conflicting
+information. Preserve associations and quantities when a source states them;
+whether they need a shared relationship model is an open design question. The
+owner is not expected to query the database personally. A fixed menu of
+human-facing buying questions does not define the scope. The data must be
+understandable from its documented structure and meanings without depending on
+the ingestion agent's conversation history.
 
 The [data contract](data-contract.md) describes the proposed handling of scraped
 records, dates, parsing, identity, and deduplication. The [implementation plan](plan.md)
 describes how we propose to address these problems. Design and sequence can
-change as we learn; the required outcomes below remain the work to accomplish.
+change as we learn; only source-faithful retention, useful retrieval, and
+traceable dates and rescrapes are established outcomes. The detailed structures
+and analysis ideas below need evidence and design review.
 
 ## P1. Heterogeneous information
 
@@ -59,38 +64,35 @@ readers and reliable storage behavior. It must be tried against unfamiliar
 sources. Requiring a handwritten parser or field mapping for every new source
 would leave the central problem unsolved.
 
-## P2. Contents, quantities, and purchase structure
+## P2. Multiple items and source-stated associations
 
-One URL may contain several independent items, a configured system, a lot, or
-selectable configurations. Installed, included, optional, compatible, mentioned,
-and explicitly absent hardware have different meanings. Components inside a
-system are not necessarily available for separate purchase.
+One payload or URL may contain several items, a system, a lot, or selectable
+configurations. These shapes can affect which source-stated price belongs to
+which item. The available captures must show which distinctions are actually
+present and useful before they become common database fields.
 
-Counts and units can also change meaning during interpretation: six 600GB
-drives are six drives of 600GB each, with 3600GB aggregate capacity. Supported
-memory capacity is not installed memory. Different adapters must remain distinct.
+**Confirmed behavior:** retain each scraped item and price with its source
+evidence. Preserve an association, quantity, or unit when the source states it;
+keep it unknown when the source does not. Do not infer that a component is
+included, installed, separately purchasable, or available in a quantity. Whether
+these facts need a general relationship model remains open until real captures
+and downstream needs are reviewed.
 
-**Required result:** stored facts and relationships identify what a purchase
-includes, each component's attributes and quantity, what is absent or optional,
-and which items can actually be bought separately. A consuming agent can query
-these distinctions without reconstructing them from the raw listing each time.
+## P3. Source-stated price information
 
-## P3. What prices cover and how costs are apportioned
+An amount may be attached to an item, group, listing, or selectable
+configuration. Asks, bids, sold prices, and acquisition costs are different
+source facts when the source identifies them. Currency, original price text, and
+stated conditions affect their meaning.
 
-An amount may buy one item, several identical units, a mixed lot, a complete
-system, or a particular selectable configuration. A base price cannot describe
-upgraded contents. Asks, bids, sold prices, and acquisition costs are different
-facts; currencies and purchase conditions also affect their meaning.
+Do not turn a listing price into an inferred component price. Cost apportionment
+or other derived allocations are separate analysis ideas, not an ingestion
+requirement; consider them only if a concrete downstream need establishes them.
 
-Breaking down a system's cost can be useful for analysis, but an attributed
-component cost is not evidence that the seller offers that component at that
-price.
-
-**Required result:** each stated amount remains attached to what it actually
-buys, including quantity, currency, price kind, and relevant conditions. Cost
-apportionment has an explicit method and supporting evidence, preserves the
-original purchase amount, and exposes missing support or uncertainty. Allocated
-costs remain distinguishable from stated market prices.
+**Confirmed behavior:** retain the stated amount, currency when present,
+original price text, source reference, and source-stated price context. Preserve
+ambiguity when the source does not establish which item or configuration an
+amount covers.
 
 ## P4. Meaningful matching and comparison
 

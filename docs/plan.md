@@ -11,8 +11,9 @@ implementation approach; completing a step does not by itself solve a problem.
 
 Other agents query the database and use the information in their own tasks.
 The first delivery is an ingestion pipeline and queryable database with
-documented data meanings. Its consumer requirements are composable retrieval,
-relationships, quantities, price scope, provenance, uncertainty, and history.
+documented data meanings. Its confirmed consumer requirements are retrieval of
+scraped facts with source and time context, visible unknowns, and deduplicated
+rescrapes with history. A general relationship model is an open design question.
 Start with the actual scraped information: item, price, currency, location,
 seller, condition, availability, description, specifications, dates, and the
 remaining source fields. Retain the original record. Structured values can be
@@ -24,8 +25,8 @@ requirement.
 | Problem | Where this plan addresses it | What must be demonstrated |
 |---|---|---|
 | [P1: heterogeneous information](problems.md#p1-heterogeneous-information) | First deliverable, steps 1–6; broader information extension | Several structurally different inputs, including one-to-many and many-to-one cases, become useful query results through the same path |
-| [P2: contents, quantities, and purchase structure](problems.md#p2-contents-quantities-and-purchase-structure) | First deliverable, steps 1–6 | Data retrieved by agents preserves contents, quantities, installed/optional/absent facts, and what can be bought separately |
-| [P3: price scope and cost apportionment](problems.md#p3-what-prices-cover-and-how-costs-are-apportioned) | First deliverable for stated purchase prices; cost apportionment extension for attributed costs | Amounts cover the correct purchases; justified allocations remain separately identified and traceable |
+| [P2: multiple items and source-stated associations](problems.md#p2-multiple-items-and-source-stated-associations) | Inspect across the first delivery; settle shared fields after source review | Preserve each scraped item and price, plus source-stated associations and quantities; do not infer missing purchase facts |
+| [P3: source-stated price information](problems.md#p3-source-stated-price-information) | First deliverable | Retain amounts, currencies when present, original text, source references, and any source-stated price context |
 | [P4: meaningful matching and comparison](problems.md#p4-meaningful-matching-and-comparison) | First deliverable, steps 2–6; broader information extension | Queries return suitable purchases and exclude misleading near matches using the relevant configuration facts |
 | [P5: source evidence, dates, and history](problems.md#p5-source-evidence-dates-and-history) | First deliverable, including the [data contract](data-contract.md#listing-identity-and-repeated-scrapes); broader continuity cases afterward | Ordinary queries deduplicate source listings; dated sightings, actual changes, and revised interpretations remain distinguishable |
 | [P6: useful incomplete information and visible failures](problems.md#p6-useful-incomplete-information-and-visible-failures) | First deliverable, steps 1–6; retry/interruption work in the continuity extension | Partial evidence remains retrievable, with explicit unknowns, conflicts, failures, and exclusions |
@@ -94,7 +95,7 @@ history, deduplication, and usable agent queries.
    responses that jointly describe one listing. Select a bounded set of captures
    for those cases; there is no arbitrary fixed capture count and no requirement
    to support every source/format combination. Include different hardware and
-   purchase structures within that set, such as a configured system, standalone
+   listing structures within that set, such as a configured system, standalone
    part or lot, and a multi-item post.
 
    Use the [located source material](data-contract.md#existing-material-to-inspect-for-these-shapes)
@@ -107,9 +108,10 @@ history, deduplication, and usable agent queries.
 
    Include a confirmed collection route independent of Bright Data. Identify
    native fields and metadata rather than inferring acquisition method from
-   source name or file format. Inspect item, prices and their scope, currency,
-   location, seller, condition, availability, specifications, and dates. Preserve
-   missing values and contradictions explicitly. Do not use a previous parser's
+   source name or file format. Inspect items, prices and their source-stated
+   associations, currency, location, seller, condition, availability,
+   specifications, and dates. Preserve missing values and contradictions
+   explicitly. Do not use a previous parser's
    output or reference spreadsheet as expected truth.
 
    Choose a finite development set and a separate, frozen set of held-back
@@ -129,11 +131,11 @@ history, deduplication, and usable agent queries.
    item/variant, and which source references and dates survive. Start with the
    scraped facts that other agents need to retrieve. Include additional
    attributes and unknowns rather than designing around one hardware family.
-   Preserve distinctions such as installed versus supported hardware,
-   per-component versus aggregate capacity, and a bundled component versus a
-   separately purchasable item.
-   Define their meanings and how agents can retrieve and combine them for their
-   own tasks. Link these requirements to the problems above.
+   Preserve distinctions and quantities when the source states them. Do not
+   infer whether a component is installed, included, or separately purchasable.
+   Identify which source-stated facts agents need to retrieve together, and
+   leave the need for a general relationship model open until source evidence
+   and downstream use have been reviewed.
 
    Done when each structural case has explicit expected records, including
    unknowns and conflicts, and representative SQL reads can establish whether
@@ -143,9 +145,9 @@ history, deduplication, and usable agent queries.
 3. **Define the provisional parser output schema.** Use the
    [initial output target](data-contract.md#initial-parser-output-target) and the
    inspected expected records to define the structured result accepted from
-   the model. Cover common item fields, multiple prices and their scopes,
-   extensible attributes, source dates, evidence references, and explicit
-   unresolved information. Preserve one-to-many and many-to-one associations.
+   the model. Cover common item fields, multiple prices and their source-stated
+   context, extensible attributes, source dates, evidence references, and
+   unresolved information. Preserve source-supported associations.
    Keep trusted collection metadata supplied by the program alongside the
    result. Define the output from all initial shapes together; the database
    schema remains provisional until the parser results have been inspected.
@@ -166,10 +168,10 @@ history, deduplication, and usable agent queries.
    run, and demonstrate that changed content is interpreted as needed. Keep
    this initial reuse behavior inspectable in the file-based experiment;
    database identity and history are added in the next step.
-   Check that every expected item and price survives and remains correctly
-   associated. Preserve dates and unknowns; validate input references and
-   established structured values. Refine the output schema against actual
-   failures before settling database tables.
+   Check that every expected item and price survives and that source-stated
+   associations are retained. Preserve dates and unknowns; validate input
+   references and established structured values. Refine the output schema
+   against actual failures before settling database tables.
 
    Establish the expected ingestion volume from the existing collectors. Record
    the inspected run's input size, model request count, elapsed time, and any
@@ -210,8 +212,8 @@ history, deduplication, and usable agent queries.
    and the [data contract's rescrape cases](data-contract.md#listing-identity-and-repeated-scrapes) behave as specified.
 
 6. **Verify consumption through agent queries.** Use the documented database
-   structure to retrieve and relate the stored information, including quantities,
-   price coverage, source evidence, and unknowns. Trace the retrieved information
+   structure to retrieve the stored information, including prices, source
+   evidence, dates, and unknowns. Trace the retrieved information
    back to the captures and interpretation. Fix discrepancies across parsing,
    storage, or querying before calling the slice working. Use focused checks to
    preserve that behavior. Keep inputs and model results inspectable; credentials
@@ -253,21 +255,18 @@ each extension small enough to demonstrate through the same agent query path.
    Show that a new meaningful category can be represented and queried without
    reproducing a fixed legacy taxonomy. Verify comparable configurations and
    deliberate near matches with source evidence.
-3. **Useful cost apportionment.** Keep the seller's purchase amount intact.
-   Demonstrate a separately identified allocation of acquisition cost across
-   contents using an explicit method and supporting evidence. Show quantities,
-   missing support, and uncertainty. An allocated cost must not appear as a
-   seller's component ask or a separately purchasable offer. Decide the method
-   from a real buying question; no arbitrary division or component valuation
-   machinery is assumed.
+3. **Consider cost apportionment only if a concrete need emerges.** This is not
+   part of the ingestion requirement. If a downstream task later needs an
+   allocation, define its method and evidence separately from the seller's
+   stated price, and review that design before implementation.
 4. **Routine intake.** Connect existing scrapers' retained capture outputs to
    the demonstrated shared path. Preserve source identity and time semantics
    across collection methods.
    Address actual acquisition gaps only after confirming what the existing
    collectors provide. Legacy corpus migration comes after the new path works.
 
-History, varied categories, and cost apportionment remain required work even
-though the first delivery is deliberately smaller.
+History and varied categories remain work beyond the first delivery. Any
+cost-apportionment feature requires a separate demonstrated need and design.
 
 ## Incorporation into the main project
 
