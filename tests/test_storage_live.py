@@ -660,8 +660,12 @@ def test_package_reuse_provenance_is_atomic_and_consumed(store, tmp_path):
         ).fetchall()
     assert len(links) == 2 and all(row["compatible"] for row in links)
     # A fresh batch after a successful reuse lookup must not inherit that lookup.
-    assert store.reuse(complete, EvidenceIndex(complete.captures), token, "a", "v1") is not None
-    rows = publish(complete, fresh(complete, "replacement"), "replacement")
+    looked_up = store.reuse(complete, EvidenceIndex(complete.captures), token, "a", "v1")
+    assert looked_up is not None
+    fresh_result = fresh(complete, "replacement")
+    fresh_result.batch_id = complete.package_id
+    assert fresh_result.model_dump() == looked_up.model_dump()
+    rows = publish(complete, fresh_result, "replacement")
     assert len(rows) == 2 and all(row["reused_from"] is None for row in rows)
     # The earlier successful batch is also one-shot, after another publish consumes state.
     rows = publish(complete, reused, "again")

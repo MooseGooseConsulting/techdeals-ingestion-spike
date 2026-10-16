@@ -129,6 +129,7 @@ class Store:
         self.dsn = dsn
         self._reuse_sources = {}
         self._reuse_signature = None
+        self._reuse_result = None
 
     def connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
@@ -197,6 +198,7 @@ class Store:
     def reuse(self, package, index, experiment_id, arm, parser_fingerprint):
         self._reuse_sources = {}
         self._reuse_signature = None
+        self._reuse_result = None
         units = prepare_units(package)
         results = []
         pending_sources = {}
@@ -223,6 +225,7 @@ class Store:
         result = ParseBatchResult(batch_id=package.package_id, units=results)
         result = require_valid_result(result, units, index)
         self._reuse_sources = pending_sources
+        self._reuse_result = result
         self._reuse_signature = (
             package.package_id,
             experiment_id,
@@ -251,9 +254,14 @@ class Store:
             parser_fingerprint,
             digest(result.model_dump(mode="json")),
         )
-        reuse_sources = self._reuse_sources if signature == self._reuse_signature else {}
+        reuse_sources = (
+            self._reuse_sources
+            if result is self._reuse_result and signature == self._reuse_signature
+            else {}
+        )
         self._reuse_sources = {}
         self._reuse_signature = None
+        self._reuse_result = None
         self.retain_package(package, index)
         expected = {u.unit_id: u for u in prepare_units(package)}
         errors, valid = [], []
