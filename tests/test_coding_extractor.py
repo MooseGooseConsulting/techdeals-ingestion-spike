@@ -117,6 +117,7 @@ def test_prepare_preserves_bytes_and_hides_oracle(tmp_path, monkeypatch):
     assert not (workspace / "corpus").exists()
     assert not (workspace / "oracle").exists()
     assert (workspace / "contract.schema.json").exists()
+    assert "repo" not in json.loads((workspace / "harness.json").read_text())
 
 
 def test_dev_evaluation_and_hidden_mutation_catch_hardcoding(tmp_path, monkeypatch):
@@ -124,9 +125,17 @@ def test_dev_evaluation_and_hidden_mutation_catch_hardcoding(tmp_path, monkeypat
     workspace = tmp_path / "work"
     harness.prepare(root, "spd", workspace)
     _program(workspace)
-    result = harness.evaluate(workspace)
+    result = harness.evaluate(workspace, repo_root=root)
     assert result["passed"], result
     assert result["mutation_passed"]
+    # Source tampering must fail even if the agent changes the embedded hash.
+    original = (workspace / "inputs/spd.json").read_text()
+    altered = original.replace("14.99", "99.99")
+    (workspace / "inputs/spd.json").write_text(altered)
+    tampered = harness.evaluate(workspace, repo_root=root)
+    assert not tampered["passed"]
+    assert "source bytes changed" in " ".join(tampered["errors"])
+    (workspace / "inputs/spd.json").write_text(original)
     # Exact example lookup is incorrect once price and product count change.
     (workspace / "extractor.py").write_text("""import argparse,json
 from pathlib import Path
