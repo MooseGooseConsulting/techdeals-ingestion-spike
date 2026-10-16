@@ -82,3 +82,41 @@ async def test_typed_multiunit_and_failure_accounting(tmp_path):
     assert all(u.status == "failed" and u.issues for u in failed.units)
     unread = await parse_batch(package, index, Session(read=False))
     assert all(u.status == "partial" for u in unread.units)
+
+
+@pytest.mark.asyncio
+async def test_child_reads_allow_complete_and_metadata_survives_repair(tmp_path):
+    package, index = setup(tmp_path, '{"title": "A"}')
+    package.captures[0].metadata = {"provenance": {"source": "trusted collection"}}
+    for capture in package.captures:
+        capture.media_type = "application/json"
+    index = EvidenceIndex(package.captures)
+
+    class RepairSession(Session):
+        calls = 0
+
+        async def run(self, agent, prompt, deps):
+            assert "trusted collection" in prompt
+            assert str(tmp_path) not in prompt
+            self.calls += 1
+            cid = "a" if self.calls == 1 else "b"
+            deps.read(EvidenceRef(capture_id=cid, locator="json:/title"), 0, 100)
+            return SimpleNamespace(
+                output=ParseBatchResult(
+                    batch_id="batch",
+                    units=[
+                        UnitResult(
+                            unit_id=cid,
+                            input_refs=[EvidenceRef(capture_id=cid, locator="$")],
+                            status="complete",
+                        )
+                    ],
+                )
+            )
+
+    session = RepairSession()
+    result = await parse_batch(package, index, session)
+    assert [u.status for u in result.units] == ["complete", "complete"]
+    assert session.calls == 2
+    assert not any(c["root_fully_read"] for c in session.coverage["captures"])
+    assert session.coverage["native_package_bytes"] == 28
