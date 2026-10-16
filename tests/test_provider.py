@@ -143,3 +143,66 @@ async def test_malformed_tool_arguments_count_toward_package_attempt_limit(monke
         assert session.tool_attempts == 2
         assert session.usage.requests == 2
     assert not executed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("oversized", ["schema", "instructions", "prompt", "tool_history"])
+async def test_context_preflight_counts_complete_request(monkeypatch, tmp_path, oversized):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-secret")
+    settings = ParserSettings.load().model_copy(update={"context_window_tokens": 24000})
+    requests = []
+    large = "x" * 25000
+
+    def read_source() -> str:
+        """Read captured evidence."""
+        return large
+
+    def handle(request):
+        requests.append(request)
+        return reply("read_source", {})
+
+    from pydantic import Field, create_model
+
+    output = (
+        create_model("LargeSchema", value=(str, Field(description=large)))
+        if oversized == "schema"
+        else Answer
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+    async with LLMRun(settings, tmp_path, http_client=client) as session:
+        agent = session.build_agent(
+            output, large if oversized == "instructions" else "Extract.", tools=[read_source]
+        )
+        with pytest.raises(UsageLimitExceeded, match="context preflight"):
+            await session.run(agent, large if oversized == "prompt" else "source")
+        assert len(requests) == (1 if oversized == "tool_history" else 0)
+        assert session.usage.requests == len(requests)
+        assert session.preflight_checks[-1]["accepted"] is False
+        assert session.preflight_checks[-1]["conservative_total"] > settings.context_window_tokens
+    trace = json.loads((tmp_path / "run-001.json").read_text())
+    assert trace["run"]["exception_type"] == "UsageLimitExceeded"
+    assert trace["context_preflight"][-1]["accepted"] is False
+
+
+@pytest.mark.asyncio
+async def test_new_tool_returns_have_separate_prepared_byte_limit(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-secret")
+    settings = ParserSettings.load().model_copy(update={"max_prepared_bytes": 100})
+    requests = []
+
+    def read_source() -> str:
+        """Read captured evidence."""
+        return "x" * 101
+
+    def handle(request):
+        requests.append(request)
+        return reply("read_source", {})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+    async with LLMRun(settings, tmp_path, http_client=client) as session:
+        with pytest.raises(UsageLimitExceeded, match="prepared source"):
+            await session.run(
+                session.build_agent(Answer, "Extract.", tools=[read_source]), "source"
+            )
+        assert len(requests) == 1
+        assert session.preflight_checks[-1]["new_content_bytes"] == 101
