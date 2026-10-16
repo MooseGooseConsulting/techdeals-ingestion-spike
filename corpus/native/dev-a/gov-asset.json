@@ -1,0 +1,32 @@
+{
+  "accountId": 30467,
+  "assetId": 94,
+  "auctionId": 1,
+  "assetShortDesc": "Lot of 64 HP 32GB DDR4 ECC LRDIMM Server Memory",
+  "assetLongDesc": "<p>64 modules. <strong>Used / surplus.</strong> Sold as-is.</p>",
+  "companyName": "Abtron Computer Services, ON",
+  "sellerTypeId": 2,
+  "city": "North York",
+  "state": "ON",
+  "zipCode": "M3H 5S4",
+  "currencyCode": "USD",
+  "catDesc": "Computer accessories",
+  "willShip": false,
+  "assetConditionCd": "SD",
+  "assetStatusCd": "STA",
+  "assetPhotos": [
+    "/photos/30467/30467_94_example.jpg"
+  ],
+  "assetAttributeGroups": [
+    {
+      "name": "All",
+      "assetAttributes": [
+        {"label": "Condition", "value": "Used/See Description"},
+        {"label": "Lot Number", "value": "30467-94"}
+      ]
+    }
+  ],
+  "removalInstructions": "<p>SHIPPING IS NOT AVAILABLE. Buyer pickup.</p>",
+  "watch_priority": "worth",
+  "judgment": {"skip_reason": "chat only"}
+}

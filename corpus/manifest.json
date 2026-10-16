@@ -1,0 +1,399 @@
+{
+  "version": 1,
+  "packages": {
+    "dev-a": [
+      "ebay-bundle",
+      "spd",
+      "hls",
+      "gov-asset",
+      "gov-bid",
+      "archive-1",
+      "archive-8",
+      "archive-10",
+      "archive-16",
+      "ssd-export"
+    ],
+    "dev-b": [
+      "disctech"
+    ],
+    "holdout-c": [
+      "hws",
+      "archive-6",
+      "archive-14",
+      "archive-17",
+      "archive-18",
+      "central-selected"
+    ],
+    "small-a": [
+      "small-spd",
+      "small-disctech"
+    ]
+  },
+  "captures": [
+    {
+      "id": "ebay-bundle",
+      "path": "corpus/native/dev-a/ebay-bundle.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:ebay-bundle",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "48c8d203be9fd3880e15c5549aa17cf83e907d38f127390f3f75d003dd3887fb",
+      "provenance": {
+        "classification": "native_capture",
+        "origin_path": "corpus/fixture-zero/raw/127932828201.json",
+        "source_commit": "4d7637c7b3a1e642737c6892c564f01b6ec33f37",
+        "selection_rule": "entire file, exact original bytes"
+      }
+    },
+    {
+      "id": "spd",
+      "path": "corpus/native/dev-a/spd.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:spd",
+      "source_namespace": "serverpartdeals",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "c9654a08ad3005fd4db87cffb496dccb5f6ac650a29da372aae7080471145826",
+      "provenance": {
+        "classification": "native_capture",
+        "origin_path": "scripts/ingest/serverpartdeals/fixtures/collections_all_p1.json",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      }
+    },
+    {
+      "id": "hls",
+      "path": "corpus/native/dev-a/hls.xml",
+      "media_type": "application/atom+xml",
+      "acquisition_key": "frozen:hls",
+      "source_namespace": "reddit",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "d43e64fbfc6ddf2a5c97a7b43610945ba6cfb00fea53a02997cc7d0bd0bab21c",
+      "provenance": {
+        "classification": "authored_fixture",
+        "origin_path": "scripts/ingest/reddit_homelabsales/fixtures/sample_atom.xml",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      }
+    },
+    {
+      "id": "gov-asset",
+      "path": "corpus/native/dev-a/gov-asset.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:gov-asset",
+      "source_namespace": "govdeals",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "15a37bd83b363d8df6aa92f908e00702379e264ec27edc0104c0e2b74a7c6bfa",
+      "provenance": {
+        "classification": "authored_enriched_fixture",
+        "origin_path": "scripts/ingest/govdeals/fixtures/asset_30467_94.json",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      },
+      "linked_group": "govdeals:30467:94:1"
+    },
+    {
+      "id": "gov-bid",
+      "path": "corpus/native/dev-a/gov-bid.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:gov-bid",
+      "source_namespace": "govdeals",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "929ae46ff921c71746c5102ff8ae84550140fbd9ede5bdadf952b8843ea18c30",
+      "provenance": {
+        "classification": "authored_enriched_fixture",
+        "origin_path": "scripts/ingest/govdeals/fixtures/bidbox_30467_94.json",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      },
+      "linked_group": "govdeals:30467:94:1"
+    },
+    {
+      "id": "disctech",
+      "path": "corpus/native/dev-b/disctech.html",
+      "media_type": "text/html",
+      "acquisition_key": "frozen:disctech",
+      "source_namespace": "disctech",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "d596fcdb2c1d6631a0a98c2b619c79b11e608d1a4fdb40f54f21ba05eb1b7efb",
+      "provenance": {
+        "classification": "native_capture",
+        "origin_path": "scripts/ingest/disctech/fixtures/ssd_listing_p1.html",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      }
+    },
+    {
+      "id": "hws",
+      "path": "corpus/native/holdout-c/hws.xml",
+      "media_type": "application/atom+xml",
+      "acquisition_key": "frozen:hws",
+      "source_namespace": "reddit",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "d9de5e676235c7c775323ff8d4ea08c108d188726f611960ac246b30606d8b76",
+      "provenance": {
+        "classification": "authored_fixture",
+        "origin_path": "scripts/ingest/reddit_homelabsales/fixtures/sample_hws_atom.xml",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "entire file, exact original bytes"
+      }
+    },
+    {
+      "id": "archive-1",
+      "path": "corpus/native/dev-a/archive-1.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-1",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "61419bfcd51ed98819eada0b476e82df90d6ff7d4bb8d70d9663f3e3fb4f5b94",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 1; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:397978307775"
+    },
+    {
+      "id": "archive-8",
+      "path": "corpus/native/dev-a/archive-8.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-8",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "b2c6048385e8448ca41c3cb658db4c3ffbb2289bf603b8a221e97d1d9974f9c8",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 8; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:397978307775"
+    },
+    {
+      "id": "archive-10",
+      "path": "corpus/native/dev-a/archive-10.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-10",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "d6be461a7f47eb14be27f14d57c844d1b0a3690486e3c4fb8bedb5612ef0542e",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 10; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:397978307775"
+    },
+    {
+      "id": "archive-16",
+      "path": "corpus/native/dev-a/archive-16.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-16",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "0efcb97fabd0b300c51f5c77a66bc8258214f6498e8793979541e72a9ce155b9",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 16; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:397978307775"
+    },
+    {
+      "id": "archive-6",
+      "path": "corpus/native/holdout-c/archive-6.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-6",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "8a3a8ab24e890d04689453034d6b1b8cb3b7894977d8379ea7b45ed3813b4bea",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 6; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:127252729784"
+    },
+    {
+      "id": "archive-14",
+      "path": "corpus/native/holdout-c/archive-14.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-14",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "a12e85e2eb2843925ca6d98cb7ebab24a408c4505e89402077f4ac28e6fde5ea",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 14; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:127252729784"
+    },
+    {
+      "id": "archive-17",
+      "path": "corpus/native/holdout-c/archive-17.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-17",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "b9683814679621aeedeb3063ac525930a340ca489469745b8f057442ebba6a96",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 17; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:127252729784"
+    },
+    {
+      "id": "archive-18",
+      "path": "corpus/native/holdout-c/archive-18.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:archive-18",
+      "source_namespace": "ebay",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "53454b146342c9ee8bde084cdf0ec61b25b0df75e6ffc4cbd5f2df77e4fa413a",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "source_commit": null,
+        "selection_rule": "zero-based JSON array index 18; JSON reserialized, not original bytes",
+        "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
+      },
+      "linked_group": "ebay:127252729784"
+    },
+    {
+      "id": "ssd-export",
+      "path": "corpus/native/dev-a/ssd-export.csv",
+      "media_type": "text/csv",
+      "acquisition_key": "frozen:ssd-export",
+      "source_namespace": "google-shopping-export",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "a086c7e2e3238b41f27bc84db3507b68b8cca9696511efeabcdbaf64f67d0ed4",
+      "provenance": {
+        "classification": "derived_export",
+        "origin_path": "research/ssd-pricing-brightdata/ssd_prices_export_v2.csv",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "header and first 10 CSV records; exact original prefix bytes",
+        "parent_sha256": "edf9fbaf1f0ae35ecd2d0fa1becc6ff85c21946fdbfb28f1c19d6f62b7081bcc"
+      }
+    },
+    {
+      "id": "central-selected",
+      "path": "corpus/native/holdout-c/central-selected.html",
+      "media_type": "text/html",
+      "acquisition_key": "frozen:central-selected",
+      "source_namespace": "central-computers",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "cbdad92393f70c61f65b5b6c6c83a23a44cbbd5d0c7a093eacce6277f51db9eb",
+      "provenance": {
+        "classification": "selected_native_html_fragment",
+        "origin_path": "scripts/ingest/central_computers/fixtures/all_products_p1_96.html",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "exact enclosing li.product-item bytes for IDs 452449,452448,449525; original head and shared inventory disclaimer text; excludes other 93 product cards",
+        "parent_sha256": "8ccc658e87692fef14d18a4bb53acbdb4235aa911d2933cce4151303d6bc2c8a"
+      }
+    },
+    {
+      "id": "small-spd",
+      "path": "corpus/native/small-a/small-spd.json",
+      "media_type": "application/json",
+      "acquisition_key": "frozen:small-spd",
+      "source_namespace": "serverpartdeals",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "55ed02a6466b819c4902e7156384fe2f10b4f1beb24787c5bbe3c829e1e83e81",
+      "provenance": {
+        "classification": "parsed_raw_fragment",
+        "origin_path": "scripts/ingest/serverpartdeals/fixtures/collections_all_p1.json",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "complete products[0] object (id 8297455845654); JSON reserialized, not original bytes",
+        "parent_sha256": "c9654a08ad3005fd4db87cffb496dccb5f6ac650a29da372aae7080471145826"
+      }
+    },
+    {
+      "id": "small-disctech",
+      "path": "corpus/native/small-a/small-disctech.html",
+      "media_type": "text/html",
+      "acquisition_key": "frozen:small-disctech",
+      "source_namespace": "disctech",
+      "metadata": {
+        "retrieved_at": null,
+        "acquisition_route": "unverified historical capture"
+      },
+      "sha256": "f29f983cfd22a624292b9f35620f75082187b0653e9ffd02c16adafa9adf6a23",
+      "provenance": {
+        "classification": "selected_native_html_fragment_with_reserialized_jsonld",
+        "origin_path": "scripts/ingest/disctech/fixtures/ssd_listing_p1.html",
+        "source_commit": "1ac8f887db62420a2c2dc2de2ed41597ee7802c6",
+        "selection_rule": "exact first enclosing div.facets-item-cell-list bytes (data-item-id 17037, SKU DEL-345-BHSC-BN-OE); complete matching native JSON-LD Product selected and reserialized with original @context; base resolves native relative URLs; excludes other 23 products",
+        "parent_sha256": "d596fcdb2c1d6631a0a98c2b619c79b11e608d1a4fdb40f54f21ba05eb1b7efb"
+      }
+    }
+  ],
+  "oracle_path": "corpus/oracle/expected.json"
+}

@@ -1,7 +1,9 @@
 # Scraped records, dates, parsing, and deduplication
 
-Status: draft design, 2026-10-16. These are the data behaviors to establish in
-the spike. Database tables and implementation have not been created.
+Status: source, date and history requirements, revised 2026-10-16.
+[design.md](design.md) describes the implemented entry interface. Requirements
+below remain acceptance criteria; implementation and test evidence do not by
+themselves establish faithful extraction or complete source coverage.
 
 The [problems document](problems.md) explains what needs solving. This document
 describes what scraped information means and how ingestion should handle it.
@@ -30,8 +32,10 @@ not establish how its contents were acquired.
 Source identifiers and timestamp meanings still need evidence. Use documented
 collector metadata where available and preserve uncertain native fields when
 their meaning is unresolved. The LLM must not turn an assumption about a field
-into an established identity or observation date. Source-specific rules are
-targeted remedies for demonstrated limitations, not prerequisites for intake.
+into an established identity or observation date. No handwritten semantic parser
+or source-specific onboarding is part of the initial path. An unfamiliar source must be accepted through the generic
+readers with explicit unresolved information where necessary. A demonstrated
+limitation may motivate a later reviewed design change.
 
 ## What comes in
 
@@ -62,8 +66,9 @@ establish structural variety.
 | Several responses describing one listing | Join description, bid/price, or manifest information only through established source keys and compatible observation context; retain every contributing payload and its own dates |
 
 These are the initial design cases, not an exhaustive list of supported sources.
-The first working delivery must exercise them through the same storage and
-agent query path. It does not require every combination of collector, format,
+The broader first working delivery must exercise them through the same storage
+and agent query path. The corpus manifest records frozen packages and provenance; constructed cases
+do not close the real-source evidence gaps. It does not require every combination of collector, format,
 hardware type, and price kind. Select source examples that expose several of
 those differences at once, and record the remaining coverage explicitly.
 
@@ -102,8 +107,8 @@ For a new or changed input shape, retain the capture and explicitly identify
 unmapped entries, uncertain associations, and failed interpretations. Do not
 silently drop entries or publish guessed fields as established facts. A failure
 in one entry must leave independently usable entries retrievable. First try a
-new source through the shared parser. Add source-specific code only for a
-demonstrated gap that general preparation or parsing cannot handle. Change
+new source through the shared parser. Record a demonstrated gap that general preparation or parsing cannot handle;
+do not introduce a source-specific semantic adapter into this path. Change
 shared semantics when inspected information shows a real new requirement.
 
 ### Existing material to inspect for these shapes
@@ -162,13 +167,16 @@ Ingestion should:
 5. Apply the listing identity and rescrape rules below before publishing the
    information for agent queries.
 
-## Initial parser output target
+## Implemented extraction interface
 
-The parser needs a provisional structured-output schema before the first model
-call. The target is extracted information from the supplied content, checked
-against varied real inputs. It is not the final database schema or a complete
-hardware taxonomy. The following is the proposed minimum shape; exact field
-definitions and example records come from inspection of the initial captures.
+`models.py` defines one `Extraction`: a list of `Entry` records and source-level
+issues. Each entry has supplied `source_refs`, nullable title, description,
+native ID, variant ID, SKU, URL, seller, location, condition and availability.
+Prices are nested under their owning entry and retain exact decimal amount,
+nullable currency, original text, kind, basis and conditions. Source dates retain
+original field, value, meaning and object scope. Flexible JSON attributes retain
+useful native specifications, images, warranty and other heterogeneous fields.
+Entry issues preserve ambiguity, truncation and material omissions.
 
 | Part of the output | Information to represent |
 |---|---|
@@ -179,6 +187,13 @@ definitions and example records come from inspection of the initial captures.
 | Attributes | Additional specifications and source fields with their original names/values, normalized values and units where justified, and supporting references; different hardware types can have different attributes |
 | Source dates | Dates stated in the supplied content, with their meaning, original text, and source references; unresolved meanings remain explicit |
 | Unresolved information | Ambiguous fields or associations, conflicts, and entries that could not be interpreted, retaining the relevant evidence |
+
+The parser uses one PydanticAI typed-output conversation with at most one
+correction. Reference and optional locator checks establish structural validity,
+not factual completeness. Source bytes are retained before inference. The
+committed configuration selects one free OpenRouter model with reasoning enabled.
+Requests, replies and corrections are saved locally for inspection. Unsupported
+UTF-8 and oversized inputs are explicit outcomes rather than silently truncated.
 
 The result can contain zero, one, or many extracted entries. An empty item
 array needs a disposition, such as no offer present or interpretation failed;
@@ -211,8 +226,9 @@ needed for persistence is retained from the start.
 
 ## Where LLM parsing fits
 
-The shared LLM-backed parser is the main proposed solution to varied source
-layouts and contextual interpretation. It receives captured content with source
+The current candidate uses a shared LLM-backed parser for varied source layouts
+and contextual interpretation. This approach remains subject to design review.
+It receives captured content with source
 and collection context and returns records in a common, extensible structure.
 It must handle unfamiliar sources without depending on a handwritten parser
 for each one. Structured source information can be copied directly. Keep the
@@ -282,10 +298,9 @@ incompatible prior result is not a successful reusable parse. The
 freshness, and history. Reuse for unchanged content does not remove the work
 required to interpret genuinely new or meaningfully changed entries.
 
-This is the proposed execution model, not demonstrated functionality. We have
-not yet established whether its output is sufficiently complete and correct,
-or whether it can process the intended ingestion volume in practice. The first
-parser experiment must examine those questions using varied real inputs.
+These are behaviors to implement and verify. Useful extraction and intended
+ingestion volume remain unestablished; the [current plan](plan.md) requires
+source-to-output-to-SQL demonstrations against varied real inputs.
 
 ## Date meanings
 
@@ -322,9 +337,8 @@ distinctions below describe required behavior, not a prescribed table count.
 - **Scrape identity:** identify the collection and its record independently of
   the listing. Reimporting or retrying the same captured result is idempotent.
 - **Stored content:** reuse unchanged listing information and retain when it
-  was seen. Choose whether compact sightings or first/last-seen intervals meet
-  the required history; do not require another complete listing copy on each
-  check. Keep source evidence retrievable. A fingerprint used for content reuse
+  was seen. Retain distinct observations linked to reusable immutable interpretations;
+  do not require another complete listing copy on each check. Keep source evidence retrievable. A fingerprint used for content reuse
   must exclude changing collection metadata such as run IDs and scrape times;
   it must not discard meaningful item, price, location, or other source fields.
 - **Dates:** map each scraper's actual date fields to their established meanings.
@@ -374,10 +388,82 @@ interpretation the source output does not already provide directly.
 Choosing or changing a collector is proposed work. No scraper, paid collection,
 or production schedule has been created or changed for this spike.
 
-## Choices still to resolve
+## Persistence and publication contract
 
-- Which initial examples have established listing/variant keys and dates, and which remain explicitly unresolved; targeted fallbacks where required for reliable history or deduplication.
-- The meaning and precision of existing provider timestamps.
-- Which source fields participate in content comparison, and how normalization affects it.
-- Whether compact sightings or first/last-seen intervals preserve the history we need.
-- The actual stored records and parser output shape, checked against the selected source data.
+Raw captured bytes and their hashes must be committed durably before parsing.
+Evidence intake is independent of parser success: failures leave captures,
+provenance, supplied metadata, and explicit dispositions retrievable. A file
+hash establishes byte identity, not the source listing, collector event, or
+meaning of a timestamp. Record collection/record identity separately so a new
+unchanged scrape can be distinguished from reimporting the same scrape.
+
+The application assigns IDs and retains acquisition receipts independently of
+model output. Extracted records are immutable interpretations of those receipts.
+Reprocessing does not manufacture a new observation time. Entries are stored in
+named SQL columns; price amounts use exact PostgreSQL NUMERIC. Attributes and
+native date claims are structured JSONB. Each entry links to all contributing
+sources and optional native locators. Failed attempts remain inspectable.
+
+The small implementation uses `ingest_*` tables and views. CLI query names are
+`entries`, `prices`, `current_entries`, `current_prices`, `history`, and `failures`.
+The first two expose stored interpretations and provenance; they are useful for
+inspection, including unknown-time or unresolved-identity evidence. Current
+views require native identity, trusted observation time and no reported issues.
+An empty issues list does not assert factual completeness. History retains
+observations; consumers must not count repeated sightings as independent offers.
+
+A trusted identity key can combine source, native listing, seller context, and
+variant where established. Collector/run identity does not split that listing.
+Unresolved native IDs or model guesses stay provisional; retain their facts
+without promoting them into authoritative cross-capture identity. Different
+sellers' offers remain distinct even for identical hardware.
+
+A content/context fingerprint for reuse excludes volatile collection metadata
+but retains semantically relevant evidence, native grouping, and parser/config
+version. Reuse is allowed only for compatible validated results. Failed,
+missing, incomplete, or incompatible results do not qualify. If generic
+normalization cannot establish semantic equivalence safely, use conservative
+byte/context identity rather than discard meaningful differences. An unchanged
+new scrape records a new sighting and may reuse the prior interpretation. An
+A–B–A sequence can reuse A's interpretation but retains all three observations
+and the chronological return to A.
+
+Choose current state by established observation time, never import or parse
+time. Late old imports remain history without replacing newer observations.
+Unknown-time evidence remains queryable separately and cannot become a current
+dated price by default. Equal observation times with incompatible results are
+an explicit conflict, not a last-write-wins choice. SQL consumers must be able
+to retrieve the competing states and their evidence. A missing field in a
+partial scrape does not imply deletion, unavailability, or a changed price.
+An issue-bearing interpretation must not silently advance an unqualified current
+state. Its own date and extracted facts remain available for inspection.
+Equal-time identical states have one current representative while source sightings
+remain. Revised interpretations and partial-source handling need explicit proof;
+an empty issues list alone is not a completeness guarantee.
+
+## Demonstration and limits
+
+Inspect native input, extraction and actual SQL reads together. Start with the
+two small native examples, then exercise a real multi-entry source and repeat
+scrapes. The oracle is review material, never parser input. Preserve frozen
+provenance and keep the holdout reserved. No overall score or model confidence
+number establishes correctness. Explicitly report omissions, unsupported claims,
+wrong price associations, date errors and provider failures.
+
+The former two-arm comparison is historical work, available in Git history;
+it does not govern this implementation. Large-document preparation, ingestion
+throughput and additional collector routes remain demonstrations to complete.
+
+## Questions that evidence must resolve
+
+- Which selected native IDs, seller/variant contexts, and observation dates have established semantics, and which remain unresolved?
+- What does each provider timestamp mean? The eBay timestamp above remains provider-reported until independently verified.
+- Which complete selected fragments and context define safe content reuse, without losing meaningful changes?
+- Which expected facts and source associations actually survive the parser and SQL storage?
+- Which intended ingestion volume is supported by the measured requests, bytes, tokens, and elapsed time? The bounded run alone does not establish collector-scale capacity.
+
+Real multi-item post and split-auction captures, verified retrieval-date
+semantics, and a proven non-Bright-Data route remain evidence gaps. Authored
+Atom/auction cases and derived CSV rows cannot close them. These unknowns do
+not prevent preserving inputs and partial interpretations, but they limit any
+claim that the broader first delivery works.

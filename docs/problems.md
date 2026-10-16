@@ -28,7 +28,7 @@ human-facing buying questions does not define the scope. The data must be
 understandable from its documented structure and meanings without depending on
 the ingestion agent's conversation history.
 
-The [data contract](data-contract.md) describes the proposed handling of scraped
+The [data contract](data-contract.md) describes the required handling of scraped
 records, dates, parsing, identity, and deduplication. The [implementation plan](plan.md)
 describes how we propose to address these problems. Design and sequence can
 change as we learn; only source-faithful retention, useful retrieval, and
@@ -59,7 +59,7 @@ real source and hardware shapes from the first working delivery. Establish the
 initial representation against several different shapes together, including
 one input producing many records and several inputs describing the same listing.
 One server family or one collector's layout cannot establish that result.
-The proposed solution is a shared LLM-backed parser, supported by general format
+The approach uses shared LLM-backed extraction, supported by general format
 readers and reliable storage behavior. It must be tried against unfamiliar
 sources. Requiring a handwritten parser or field mapping for every new source
 would leave the central problem unsolved.
@@ -168,3 +168,16 @@ Broad legacy migration waits until the new path works. Development
 must protect the existing cluster and production data. Production incorporation
 follows demonstration of useful behavior and review of the affected consumers
 and history.
+
+## What the next implementation establishes
+
+Follow the [design correction](design.md) and [plan](plan.md): a small, varied
+source-to-entry-to-SQL path, followed by multi-entry inputs and rescrape behavior.
+The former paired-parser comparison does not define completion. The current
+prototype is not evidence that useful extraction has been established.
+
+Authored feed/auction fixtures and a derived CSV expose behavior without proving
+real coverage. Real multi-item sale-post and split-auction evidence, established
+observation-date semantics, and a verified non-Bright-Data collection route remain
+coverage gaps. Preserve those gaps without building a general evaluation framework
+before the first useful extracted records exist.

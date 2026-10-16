@@ -1,0 +1,11 @@
+obs_id,scraped_at,retailer,brand,model_name,interface,capacity_gb,price_usd,cents_per_gb,condition,source_url
+192,2026-07-31T10:05:33.729223+00:00,eBay - fanxiang-official-store,Fanxiang,Fanxiang Ssd 1tb M.2 Nvme 2tb 4tb Internal Solid State Hard Drive Game,PCIe 4.0,4000,39.99,1.0,new,https://shopping.google.com
+206,2026-07-31T10:05:33.729223+00:00,eBay - fanxiang-online-store,Fanxiang,Fanxiang Nvme M.2 Ssd 512gb 1tb 2tb 4tb Pcie Gen3 Internal Solid State,PCIe 3.0,4000,47.92,1.2,new,https://shopping.google.com
+196,2026-07-31T10:05:33.729223+00:00,eBay - fanxiang-online-store,Fanxiang,Fanxiang 1tb Ssd M.2 2280 2tb 512gb Pcie Gen 3.0 Nvme 3d Solid State,PCIe 3.0,2000,36.79,1.84,new,https://shopping.google.com
+194,2026-07-31T10:05:33.729223+00:00,eBay - netac-official-store,Netac,Netac Ssd 500gb 1tb 2tb Pcie Nvme Gen3x4 M.2 Solid State Drive,PCIe 3.0,2000,39.99,2.0,new,https://shopping.google.com
+145,2026-07-31T10:05:33.729223+00:00,Mobilpcservis.sk,Solid Apollo,1 Tb Ssd HIRVOD 1TB SSD Internal SATA III: Blazing Fast 570MB/s Read Speed Upgrade Ssd Hard Disk,SATA III,1000,25.0,2.5,new,https://shopping.google.com
+179,2026-07-31T10:05:33.729223+00:00,Walmart - lianchenshangmao,Unknown,2tb Magnetic Mini Portable Ssd for iPhone 15/16 Pro/Pro Max,USB 3.2,2000,52.99,2.65,new,https://shopping.google.com
+160,2026-07-31T10:05:33.729223+00:00,ravir film,Unknown,Timetec 1TB SSD 3D NAND SATA III 6Gb/s M.2 2280 NGFF 512TBW Read Speed Up to 550MB/s SLC Cache Performance Boost Internal Solid State Drive for PC,SATA III,2000,57.2,2.86,new,https://shopping.google.com
+156,2026-07-31T10:05:33.729223+00:00,Newegg.com - Fanxiang Official Store,Fanxiang,fanxiang 4TB SATA 2.5'' 6Gb/s 3D NAND QLC Internal Solid State Drive,SATA III,4000,129.99,3.25,new,https://shopping.google.com
+146,2026-07-31T10:05:33.729223+00:00,Tuesday Morning,Unknown,2TB External SSD,USB 3.2,2000,70.95,3.55,new,https://shopping.google.com
+209,2026-07-31T10:05:33.729223+00:00,eBay - fik-8981,Unknown,Fikwot M.2 NVMe SSD 1TB 2TB PCIe 4.0 Gen4 Internal SSD Hard Drive For PS5 Laptop | Mac Compatible | RoHS Compliant | 5000MB/s Read Speed,PCIe 4.0,2000,71.98,3.6,new,https://shopping.google.com
