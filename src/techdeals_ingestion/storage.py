@@ -176,8 +176,13 @@ def _typed_source_refs(extraction: Extraction, mapping: dict[str, str]) -> Extra
 
 
 def _meaning(entry: Entry) -> dict[str, Any]:
+    """Hash listing facts without receipt-specific source references."""
     data = entry.model_dump(mode="json")
     data.pop("source_refs", None)
+    for price in data.get("prices") or []:
+        price.pop("source_refs", None)
+    for source_date in data.get("source_dates") or []:
+        source_date.pop("source_refs", None)
     return data
 
 
