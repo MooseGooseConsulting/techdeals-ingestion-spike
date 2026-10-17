@@ -532,3 +532,18 @@ def _identity_key(entry: Entry, source_rows: list[dict[str, Any]]) -> str | None
     # A SKU names a product, not an offer. Without a native id there is no verified
     # offer URL to separate two listings, so they stay unresolved.
     return None
+
+
+def _legacy_sku_identity_key(namespace: str | None, sku: str | None, seller: str | None) -> str:
+    """Former identity for a SKU-only listing. New saves no longer assign this key."""
+    return _digest({"namespace": namespace, "sku": sku, "seller": seller})
+
+
+def _without_legacy_sku_identity(row: dict[str, Any]) -> dict[str, Any]:
+    """Drop a stored SKU-derived key. The row remains; native-id keys stay."""
+    if row.get("native_id") or not row.get("sku") or row.get("identity_key") is None:
+        return row
+    legacy = _legacy_sku_identity_key(row.get("namespace"), row.get("sku"), row.get("seller"))
+    if row.get("identity_key") != legacy:
+        return row
+    return {**row, "identity_key": None}
