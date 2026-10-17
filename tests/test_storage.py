@@ -19,6 +19,7 @@ from techdeals_ingestion.storage import (
     _identity_key,
     _meaning,
     _rebind_mapping,
+    _row_context,
     _safe_error,
     _typed_source_refs,
     _without_legacy_sku_identity,
@@ -50,6 +51,47 @@ def test_semantic_key_ignores_receipt_id_and_retrieval_time():
     assert semantic_key([first], "parser-v1") != semantic_key(
         [source("capture-d", "fetch-d", namespace="other")], "parser-v1"
     )
+
+
+def test_semantic_key_ignores_filename_and_acquisition_metadata():
+    first = source("capture-a", "fetch-a")
+    later = Source(
+        input_id="capture-b",
+        acquisition_key="fetch-b",
+        content=first.content,
+        media_type=first.media_type,
+        namespace=first.namespace,
+        retrieved_at=datetime(2026, 10, 16, tzinfo=UTC),
+        url=first.url,
+        metadata={
+            "feed": "daily",
+            "filename": "other.json",
+            "acquisition_metadata": {"run_id": "run-2"},
+        },
+    )
+    assert semantic_key([first], "parser-v1") == semantic_key([later], "parser-v1")
+    changed = Source(
+        input_id="capture-c",
+        acquisition_key="fetch-c",
+        content=first.content,
+        media_type=first.media_type,
+        namespace=first.namespace,
+        url=first.url,
+        metadata={"feed": "weekly"},
+    )
+    assert semantic_key([first], "parser-v1") != semantic_key([changed], "parser-v1")
+    row = {
+        "sha256": "abc",
+        "media_type": "application/json",
+        "namespace": "shop",
+        "url": "https://shop.example/items/42",
+        "metadata": {
+            "feed": "daily",
+            "filename": "listing.json",
+            "acquisition_metadata": {"run_id": "run-9"},
+        },
+    }
+    assert _row_context(row)["metadata"] == {"feed": "daily"}
 
 
 def test_cache_rebinding_only_changes_typed_source_refs():
