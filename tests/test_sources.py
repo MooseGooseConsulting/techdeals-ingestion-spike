@@ -56,6 +56,22 @@ def test_rescraped_file_gets_stable_acquisition_specific_input_ids(tmp_path):
     assert first.sources[0].metadata["filename"] == path.name
 
 
+def test_multi_file_receipt_keys_ignore_argument_order(tmp_path):
+    first = tmp_path / "a.json"
+    second = tmp_path / "b.json"
+    first.write_text("one")
+    second.write_text("two")
+    forward = load_files([first, second], namespace="shop", acquisition_key="batch")
+    reverse = load_files([second, first], namespace="shop", acquisition_key="batch")
+    assert {source.acquisition_key for source in forward.sources} == {
+        source.acquisition_key for source in reverse.sources
+    }
+    assert {source.input_id for source in forward.sources} == {
+        source.input_id for source in reverse.sources
+    }
+    assert len({source.acquisition_key for source in forward.sources}) == 2
+
+
 def test_repeated_import_ignores_mtime_and_duplicate_basenames_stay_distinct(tmp_path):
     first_dir = tmp_path / "vendor-a"
     second_dir = tmp_path / "vendor-b"
