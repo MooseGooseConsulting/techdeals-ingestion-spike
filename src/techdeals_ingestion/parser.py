@@ -26,7 +26,7 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.usage import UsageLimits
 
-from .models import Entry, Extraction, Source, SourceIssue
+from .models import Entry, Extraction, Price, Source, SourceIssue
 from .settings import ParserSettings, fingerprint
 
 _INSTRUCTIONS = """Extract useful listing entries from the supplied native source blocks.
@@ -173,20 +173,32 @@ def _entry_link_problem(entry: Entry, by_id: dict[str, Source]) -> str | None:
     return "entry combines inputs that do not share one linked_group"
 
 
+def _capture_text(source: Source) -> str:
+    return source.content.decode("utf-8", errors="replace")
+
+
+def _price_missing_captures(price: Price, sources: list[Source]) -> list[Source]:
+    """A citation is valid only when that capture actually contains the price text."""
+    original = price.original.strip()
+    return [source for source in sources if original not in _capture_text(source)]
+
+
 def _nested_evidence_problems(
     entry: Entry, entry_index: int, by_id: dict[str, Source]
 ) -> list[str]:
     allowed = {ref.input_id for ref in entry.source_refs}
-    known_inputs = {ref.input_id for ref in entry.source_refs if ref.input_id in by_id}
+    known_inputs = [by_id[ref.input_id] for ref in entry.source_refs if ref.input_id in by_id]
+    known_ids = {source.input_id for source in known_inputs}
     problems: list[str] = []
     nested = [("price", entry.prices), ("source date", entry.source_dates)]
     for label, values in nested:
         for index, value in enumerate(values):
-            if len(known_inputs) > 1 and not value.source_refs:
+            if len(known_ids) > 1 and not value.source_refs:
                 problems.append(
                     f"entry {entry_index} {label} {index} needs source_refs "
                     "when the entry cites multiple inputs"
                 )
+            cited: list[Source] = []
             for ref in value.source_refs:
                 if ref.input_id not in allowed:
                     problems.append(
@@ -195,10 +207,21 @@ def _nested_evidence_problems(
                     )
                     continue
                 source = by_id.get(ref.input_id)
-                if source is not None and ref.locator is not None:
+                if source is None:
+                    continue
+                if source.input_id not in {item.input_id for item in cited}:
+                    cited.append(source)
+                if ref.locator is not None:
                     error = _locator_error(source, ref.locator)
                     if error:
                         problems.append(f"entry {entry_index} {label} {index}: {error}")
+            if label == "price":
+                supporting = cited or known_inputs
+                for source in _price_missing_captures(value, supporting):
+                    problems.append(
+                        f"entry {entry_index} price {index} is not present in "
+                        f"cited input {source.input_id!r}"
+                    )
     return problems
 
 
