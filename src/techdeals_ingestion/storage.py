@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -42,6 +43,100 @@ def _source_context(source: Source) -> dict[str, Any]:
     }
 
 
+def _row_context(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "content_sha256": row["sha256"],
+        "media_type": row["media_type"],
+        "namespace": row["namespace"],
+        "url": row["url"],
+        "metadata": {
+            key: value
+            for key, value in row["metadata"].items()
+            if key not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
+        },
+    }
+
+
+def _link_signatures(items: list[dict[str, Any]]) -> dict[str, tuple[str, ...] | None]:
+    """Group membership is the sorted content of the linked inputs, not their receipt IDs."""
+    members: dict[str, list[str]] = {}
+    for item in items:
+        if item["linked_group"]:
+            members.setdefault(item["linked_group"], []).append(item["context_digest"])
+    signatures: dict[str, tuple[str, ...] | None] = {}
+    for item in items:
+        if item["linked_group"]:
+            signatures[item["input_id"]] = tuple(sorted(members[item["linked_group"]]))
+        else:
+            signatures[item["input_id"]] = None
+    return signatures
+
+
+def _source_items(sources: list[Source]) -> list[dict[str, Any]]:
+    items = []
+    for source in sources:
+        context = _source_context(source)
+        items.append(
+            {
+                "input_id": source.input_id,
+                "context": context,
+                "context_digest": _digest(context),
+                "linked_group": source.linked_group,
+            }
+        )
+    return items
+
+
+def _row_items(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items = []
+    for row in rows:
+        context = _row_context(row)
+        items.append(
+            {
+                "input_id": row["input_id"],
+                "context": context,
+                "context_digest": _digest(context),
+                "linked_group": row["linked_group"],
+            }
+        )
+    return items
+
+
+def _rebind_mapping(
+    old_items: list[dict[str, Any]], new_items: list[dict[str, Any]]
+) -> dict[str, str] | None:
+    """Pair cached inputs to new receipts by content and linked-group membership."""
+    old_signatures = _link_signatures(old_items)
+    new_signatures = _link_signatures(new_items)
+    old_groups: dict[tuple[str, tuple[str, ...] | None], list[str]] = {}
+    new_groups: dict[tuple[str, tuple[str, ...] | None], list[str]] = {}
+    for item, signatures, groups in (
+        (old_items, old_signatures, old_groups),
+        (new_items, new_signatures, new_groups),
+    ):
+        for entry in item:
+            key = (entry["context_digest"], signatures[entry["input_id"]])
+            groups.setdefault(key, []).append(entry["input_id"])
+    if set(old_groups) != set(new_groups):
+        return None
+    mapping: dict[str, str] = {}
+    for key, old_ids in old_groups.items():
+        new_ids = new_groups[key]
+        if len(old_ids) != len(new_ids):
+            return None
+        mapping.update(zip(sorted(old_ids), sorted(new_ids), strict=True))
+    if len(mapping) != len(old_items):
+        return None
+    return mapping
+
+
+def _reusable(result: Extraction) -> bool:
+    """Only complete, issue-free extractions may be replayed for later acquisitions."""
+    if result.issues or any(entry.issues for entry in result.entries):
+        return False
+    return bool(result.entries)
+
+
 def semantic_key(sources: list[Source], parser_key: str) -> str:
     """Stable exact-content key for parser reuse across later acquisition receipts."""
     contexts = [_source_context(source) for source in sources]
@@ -64,9 +159,17 @@ def semantic_key(sources: list[Source], parser_key: str) -> str:
 def _typed_source_refs(extraction: Extraction, mapping: dict[str, str]) -> Extraction:
     """Rebind only contract source_refs. Identical-looking native JSON stays untouched."""
     data = extraction.model_dump(mode="python")
-    for entry in data["entries"]:
-        for ref in entry["source_refs"]:
+
+    def rebind(refs: list[dict[str, Any]]) -> None:
+        for ref in refs:
             ref["input_id"] = mapping.get(ref["input_id"], ref["input_id"])
+
+    for entry in data["entries"]:
+        rebind(entry["source_refs"])
+        for price in entry["prices"]:
+            rebind(price["source_refs"])
+        for source_date in entry["source_dates"]:
+            rebind(source_date["source_refs"])
     for issue in data["issues"]:
         issue["input_id"] = mapping.get(issue["input_id"], issue["input_id"])
     return Extraction.model_validate(data)
@@ -111,32 +214,11 @@ class Store:
                     (sha, source.content),
                 )
                 metadata = Jsonb(source.metadata)
-                existing = conn.execute(
-                    "SELECT * FROM ingest_sources WHERE input_id=%s OR acquisition_key=%s",
-                    (source.input_id, source.acquisition_key),
-                ).fetchall()
-                if existing:
-                    row = existing[0]
-                    expected = {
-                        "input_id": source.input_id,
-                        "acquisition_key": source.acquisition_key,
-                        "sha256": sha,
-                        "media_type": source.media_type,
-                        "namespace": source.namespace,
-                        "retrieved_at": source.retrieved_at,
-                        "url": source.url,
-                        "linked_group": source.linked_group,
-                        "metadata": source.metadata,
-                    }
-                    if len(existing) != 1 or row != expected:
-                        raise ValueError(
-                            "input or acquisition key already retained with different source data"
-                        )
-                    continue
                 conn.execute(
                     """INSERT INTO ingest_sources
                     (input_id,acquisition_key,sha256,media_type,namespace,retrieved_at,url,linked_group,metadata)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT DO NOTHING""",
                     (
                         source.input_id,
                         source.acquisition_key,
@@ -149,6 +231,25 @@ class Store:
                         metadata,
                     ),
                 )
+                existing = conn.execute(
+                    "SELECT * FROM ingest_sources WHERE input_id=%s OR acquisition_key=%s",
+                    (source.input_id, source.acquisition_key),
+                ).fetchall()
+                expected = {
+                    "input_id": source.input_id,
+                    "acquisition_key": source.acquisition_key,
+                    "sha256": sha,
+                    "media_type": source.media_type,
+                    "namespace": source.namespace,
+                    "retrieved_at": source.retrieved_at,
+                    "url": source.url,
+                    "linked_group": source.linked_group,
+                    "metadata": source.metadata,
+                }
+                if len(existing) != 1 or existing[0] != expected:
+                    raise ValueError(
+                        "input or acquisition key already retained with different source data"
+                    )
 
     def _retained(self, conn, sources: list[Source]) -> dict[str, dict[str, Any]]:
         ids = [source.input_id for source in sources]
@@ -188,58 +289,25 @@ class Store:
             ).fetchall()
             if not rows:
                 return None
-            wanted: dict[str, list[str]] = {}
-            for source in sources:
-                wanted.setdefault(_digest(_source_context(source)), []).append(source.input_id)
-            current_ids: dict[str, list[str]] = {}
-            for source in sorted(sources, key=lambda s: s.input_id):
-                current_ids.setdefault(_digest(_source_context(source)), []).append(source.input_id)
+            current_items = _source_items(sources)
             for row in rows:
                 old_sources = conn.execute(
-                    "SELECT input_id,sha256,media_type,namespace,url,metadata FROM ingest_sources WHERE input_id=ANY(%s)",
+                    """SELECT input_id,sha256,media_type,namespace,url,metadata,linked_group
+                    FROM ingest_sources WHERE input_id=ANY(%s)""",
                     (row["source_ids"],),
                 ).fetchall()
                 if len(old_sources) != len(sources):
                     continue
-                old_contexts = [
-                    {
-                        "content_sha256": old["sha256"],
-                        "media_type": old["media_type"],
-                        "namespace": old["namespace"],
-                        "url": old["url"],
-                        "metadata": {
-                            k: v
-                            for k, v in old["metadata"].items()
-                            if k not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
-                        },
-                    }
-                    for old in old_sources
-                ]
+                old_items = _row_items(old_sources)
+                old_contexts = [item["context"] for item in old_items]
                 if sorted(old_contexts, key=_json) != contexts:
                     continue
-                old_by_context: dict[str, list[str]] = {}
-                for old in sorted(old_sources, key=lambda value: value["input_id"]):
-                    context = {
-                        "content_sha256": old["sha256"],
-                        "media_type": old["media_type"],
-                        "namespace": old["namespace"],
-                        "url": old["url"],
-                        "metadata": {
-                            k: v
-                            for k, v in old["metadata"].items()
-                            if k not in {"input_id", "acquisition_key", "retrieved_at", "sha256"}
-                        },
-                    }
-                    old_by_context.setdefault(_digest(context), []).append(old["input_id"])
-                mapping: dict[str, str] = {}
-                for context_digest, old_ids in old_by_context.items():
-                    new_ids = current_ids.get(context_digest, [])
-                    if len(old_ids) != len(new_ids):
-                        break
-                    mapping.update(zip(old_ids, new_ids, strict=True))
-                if len(mapping) != len(old_sources):
+                mapping = _rebind_mapping(old_items, current_items)
+                if mapping is None:
                     continue
                 result = Extraction.model_validate(row["result"])
+                if not _reusable(result):
+                    continue
                 return _typed_source_refs(result, mapping), row["attempt_id"]
         return None
 
@@ -278,18 +346,14 @@ class Store:
         )
         with self.connect() as conn:
             retained = self._retained(conn, sources)
-            prior = conn.execute(
-                "SELECT attempt_id,saved_entries FROM ingest_attempts WHERE receipt_key=%s",
-                (receipt_key,),
-            ).fetchone()
-            if prior:
-                return {"attempt_id": prior["attempt_id"], "saved_entries": prior["saved_entries"]}
-            attempt_id = str(uuid4())
             count = len(result.entries) if result is not None else 0
-            conn.execute(
+            attempt_id = str(uuid4())
+            inserted = conn.execute(
                 """INSERT INTO ingest_attempts
                 (attempt_id,receipt_key,semantic_key,parser_key,source_ids,reuse_of,result,error,saved_entries)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (receipt_key) DO NOTHING
+                RETURNING attempt_id, saved_entries""",
                 (
                     attempt_id,
                     receipt_key,
@@ -301,8 +365,17 @@ class Store:
                     safe_error,
                     count,
                 ),
-            )
+            ).fetchone()
+            if inserted is None:
+                prior = conn.execute(
+                    "SELECT attempt_id,saved_entries FROM ingest_attempts WHERE receipt_key=%s",
+                    (receipt_key,),
+                ).fetchone()
+                if prior is None:
+                    raise ValueError("attempt receipt was not stored")
+                return {"attempt_id": prior["attempt_id"], "saved_entries": prior["saved_entries"]}
             if result is not None:
+                prepared = []
                 for entry in result.entries:
                     refs = entry.source_refs
                     source_rows = [retained[ref.input_id] for ref in refs]
@@ -310,10 +383,18 @@ class Store:
                     observed_at = (
                         next(iter(times)) if len(times) == 1 and None not in times else None
                     )
+                    prepared.append((entry, refs, observed_at, _identity_key(entry, source_rows)))
+                identity_counts = Counter(
+                    identity for _, _, _, identity in prepared if identity is not None
+                )
+                issue_inputs = {issue.input_id for issue in result.issues}
+                for entry, refs, observed_at, identity_key in prepared:
+                    if identity_key is not None and identity_counts[identity_key] > 1:
+                        identity_key = None
+                    entry_inputs = {ref.input_id for ref in refs}
+                    has_reported_issues = bool(entry.issues) or bool(issue_inputs & entry_inputs)
                     meaning = _meaning(entry)
-                    identity_key = _identity_key(entry, source_rows)
                     entry_id = str(uuid4())
-                    has_reported_issues = bool(result.issues or entry.issues)
                     conn.execute(
                         """INSERT INTO ingest_entry_rows
                         (entry_id,attempt_id,title,description,native_id,variant_id,sku,url,seller,location,
@@ -350,8 +431,8 @@ class Store:
                     for ordinal, price in enumerate(entry.prices):
                         conn.execute(
                             """INSERT INTO ingest_price_rows
-                            (entry_id,ordinal,amount,currency,original,kind,basis,conditions)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                            (entry_id,ordinal,amount,currency,original,kind,basis,conditions,source_refs)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                             (
                                 entry_id,
                                 ordinal,
@@ -361,6 +442,7 @@ class Store:
                                 price.kind,
                                 price.basis,
                                 price.conditions,
+                                Jsonb([ref.model_dump(mode="json") for ref in price.source_refs]),
                             ),
                         )
             return {"attempt_id": attempt_id, "saved_entries": count}
@@ -416,6 +498,7 @@ def _identity_key(entry: Entry, source_rows: list[dict[str, Any]]) -> str | None
             "namespace": next(iter(namespaces)),
             "native_id": entry.native_id,
             "variant_id": entry.variant_id,
+            "sku": entry.sku,
             "seller": entry.seller,
         }
     )
