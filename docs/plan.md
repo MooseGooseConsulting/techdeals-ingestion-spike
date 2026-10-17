@@ -161,6 +161,10 @@ must fit the smaller prepared-request allowance.
 
 ## Implementation sequence and acceptance
 
+This section is retained history from the retired paired-candidate comparison.
+It is not the current implementation sequence. Follow the PydanticAI sequence
+under "Implementation sequence" near the top of this document.
+
 1. **Freeze evidence and expectations.** Inspect development and holdout material,
    record native references, expected facts, purchase scope, source dates and
    unknowns. Preserve authored/derived labels and the real-evidence gaps above.
