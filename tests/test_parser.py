@@ -426,6 +426,15 @@ def test_formatted_price_amount_must_match_original():
         with pytest.raises(ValidationError):
             Price(original=original, kind="ask", amount="30")
         assert Price(original=original, kind="ask", amount="20").amount == Decimal(20)
+    with pytest.raises(ValidationError, match="amount must match the original price"):
+        Price(original="Sale price: $500", kind="ask", amount="5000")
+    assert Price(original="Sale price: $500", kind="ask", amount="500").amount == Decimal(500)
+    with pytest.raises(ValidationError, match="not checkable"):
+        Price(original="Call for price", kind="ask", amount="10")
+    assert Price(original="Call for price", kind="ask", amount=None).amount is None
+    with pytest.raises(ValidationError, match="not checkable"):
+        Price(original="$10 or $20", kind="ask", amount="10")
+    assert Price(original="$10 or $20", kind="ask", amount=None).amount is None
 
 
 @pytest.mark.asyncio
@@ -689,6 +698,32 @@ async def test_price_citation_must_appear_in_the_cited_capture(tmp_path):
     assert len(misplaced) == 2
     assert located.entries[0].prices[0].original == "$10"
 
+    fraction = []
+
+    async def fractional_original(messages, info):
+        fraction.append(messages)
+        original = "99" if len(fraction) == 1 else "14.99"
+        amount = "99" if original == "99" else "14.99"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "fraction",
+                    "prices": [{"original": original, "kind": "ask", "amount": amount}],
+                }
+            ],
+        )
+
+    fraction_result = await parse(
+        [source(content=b'{"ask":"$14.99"}')],
+        ParserSettings.load(),
+        tmp_path / "fraction",
+        model=FunctionModel(stream_function=fractional_original),
+    )
+    assert len(fraction) == 2
+    assert fraction_result.entries[0].prices[0].original == "14.99"
+
 
 @pytest.mark.asyncio
 async def test_json_unicode_price_text_is_decoded_before_citation_check(tmp_path):
@@ -824,6 +859,158 @@ async def test_numeric_json_and_html_attribute_prices_are_cited(tmp_path):
     )
     assert len(attribute) == 2
     assert attribute_result.entries[0].prices[0].original == "799"
+
+    quantity = []
+
+    async def quantity_selector(messages, info):
+        quantity.append(messages)
+        if len(quantity) == 1:
+            price = {
+                "original": "1",
+                "kind": "ask",
+                "amount": "1",
+                "source_refs": [{"input_id": "capture-1", "locator": "html:input[name=quantity]"}],
+            }
+        else:
+            price = {
+                "original": "$799.00",
+                "kind": "ask",
+                "amount": "799.00",
+                "source_refs": [{"input_id": "capture-1", "locator": "html:span.product-price"}],
+            }
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "DiscTech",
+                    "prices": [price],
+                }
+            ],
+        )
+
+    disctech = (
+        b'<input name="quantity" class="cart-quickaddtocart-quantity" type="number" value="1">'
+        b'<span class="product-price" data-role="price-lead-formatted" data-rate="799">$799.00</span>'
+        b'<meta content="799">'
+    )
+    quantity_result = await parse(
+        [source(content=disctech)],
+        ParserSettings.load(),
+        tmp_path / "quantity",
+        model=FunctionModel(stream_function=quantity_selector),
+    )
+    assert len(quantity) == 2
+    assert quantity_result.entries[0].prices[0].original == "$799.00"
+
+
+@pytest.mark.asyncio
+async def test_json_numeric_evidence_keeps_the_source_spelling(tmp_path):
+    histories = []
+    lexical = "0.1234567890123456789"
+    rounded = "0.12345678901234568"
+
+    async def respond(messages, info):
+        histories.append(messages)
+        original = rounded if len(histories) == 1 else lexical
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "precise",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": original,
+                            "source_refs": [{"input_id": "capture-1", "locator": "json:/ask"}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'{"ask":0.1234567890123456789}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 2
+    assert result.entries[0].prices[0].original == lexical
+    assert result.entries[0].prices[0].amount == Decimal(lexical)
+
+
+@pytest.mark.asyncio
+async def test_bom_prefixed_json_price_is_cited(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        original = "$200" if len(histories) == 1 else "$20"
+        amount = "200" if original == "$200" else "20"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "bom",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": amount,
+                            "source_refs": [{"input_id": "capture-1", "locator": "json:/ask"}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'\xef\xbb\xbf{"ask":"$20"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 2
+    assert result.entries[0].prices[0].original == "$20"
+
+
+@pytest.mark.asyncio
+async def test_source_date_must_appear_in_the_cited_capture(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        if len(histories) == 1:
+            source_date = {
+                "original_field": "retrieved_at",
+                "value": "2026-10-16T00:00:00+00:00",
+            }
+        else:
+            source_date = {"original_field": "published", "value": "2026-01-02"}
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "dated",
+                    "source_dates": [source_date],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'{"name":"disk","published":"2026-01-02"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 2
+    assert result.entries[0].source_dates[0].original_field == "published"
+    assert result.entries[0].source_dates[0].value == "2026-01-02"
 
 
 def test_output_models_keep_prices_nested_and_fields_ordinary():
