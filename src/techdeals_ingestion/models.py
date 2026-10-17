@@ -63,6 +63,13 @@ class Price(Output):
         default=None,
         description="Price conditions copied faithfully from the source; JSON null if absent.",
     )
+    source_refs: list[SourceRef] = Field(
+        default_factory=list,
+        description=(
+            "Captures and optional locators that support this price. Required when the entry cites "
+            "more than one input; a single entry source already identifies the capture."
+        ),
+    )
 
     @model_validator(mode="after")
     def amount_matches_plain_numeric_original(self) -> "Price":
@@ -89,6 +96,13 @@ class SourceDate(Output):
         description=(
             "Source object this date belongs to when established, such as a listing or item; "
             "otherwise JSON null. Never use collection retrieval time here."
+        ),
+    )
+    source_refs: list[SourceRef] = Field(
+        default_factory=list,
+        description=(
+            "Captures and optional locators that support this date. Required when the entry cites "
+            "more than one input; a single entry source already identifies the capture."
         ),
     )
 
