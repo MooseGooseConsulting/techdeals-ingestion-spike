@@ -1,5 +1,6 @@
 -- These are derived query surfaces owned by this small ingestion schema.
 -- Recreate them in dependency order so additive column changes remain repeatable.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DROP VIEW IF EXISTS ingest_current_prices;
 DROP VIEW IF EXISTS ingest_current_entries;
 DROP VIEW IF EXISTS ingest_history;
@@ -109,6 +110,35 @@ CREATE TABLE IF NOT EXISTS ingest_entry_sources (
     PRIMARY KEY(entry_id, input_id, locator)
 );
 
+-- Rows saved under the retired SKU identity stay in history, but they are no longer current.
+-- The digest is sha256 of {"namespace":...,"seller":...,"sku":...} with compact sorted JSON.
+-- Native-id identities use a different payload and are left in place.
+UPDATE ingest_entry_rows AS e
+SET identity_key = NULL
+WHERE e.native_id IS NULL
+  AND e.sku IS NOT NULL
+  AND e.identity_key IS NOT NULL
+  AND e.identity_key = (
+      SELECT encode(digest(convert_to(
+          format(
+              '{"namespace":%s,"seller":%s,"sku":%s}',
+              to_json(ns.namespace)::text,
+              COALESCE(to_json(e.seller)::text, 'null'),
+              to_json(e.sku)::text
+          ),
+          'UTF8'
+      ), 'sha256'), 'hex')
+      FROM (
+          SELECT CASE
+              WHEN count(DISTINCT s.namespace) = 1 THEN min(s.namespace)
+          END AS namespace
+          FROM ingest_entry_sources es
+          JOIN ingest_sources s ON s.input_id = es.input_id
+          WHERE es.entry_id = e.entry_id
+      ) ns
+      WHERE ns.namespace IS NOT NULL
+  );
+
 CREATE VIEW ingest_entries AS
 SELECT e.*, a.parser_key, a.reuse_of, a.created_at AS imported_at,
        COALESCE(src.input_ids, '[]'::jsonb) AS input_ids,
@@ -175,8 +205,11 @@ WITH eligible AS (
              'attributes', k.attributes,
              'issues', k.issues,
              'source_dates', COALESCE((
-               SELECT jsonb_agg((d - 'source_refs') ORDER BY ordinality)
-               FROM jsonb_array_elements(k.source_dates) WITH ORDINALITY AS dated(d, ordinality)
+               SELECT jsonb_agg(date_fact ORDER BY date_fact)
+               FROM (
+                 SELECT (d - 'source_refs') AS date_fact
+                 FROM jsonb_array_elements(k.source_dates) AS dated(d)
+               ) dated
              ), '[]'::jsonb),
              'prices', COALESCE((
                SELECT jsonb_agg(price_fact ORDER BY price_fact)
