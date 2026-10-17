@@ -84,15 +84,19 @@ def load_files(
     retrieved = _datetime(retrieved_at)
     extra = dict(metadata or {})
     sources = []
-    for path_value in paths:
+    for index, path_value in enumerate(paths):
         path = Path(path_value)
         if not path.is_file():
             raise ValueError(f"Input is not a file: {path}")
+        content = path.read_bytes()
         media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         if acquisition_key:
-            receipt_key = acquisition_key if len(paths) == 1 else f"{acquisition_key}:{path.name}"
+            receipt_key = (
+                acquisition_key if len(paths) == 1 else f"{acquisition_key}:{index}:{path.name}"
+            )
         else:
-            receipt = retrieved.isoformat() if retrieved else str(path.stat().st_mtime_ns)
+            # Same bytes are the same capture. A distinct sighting needs an explicit receipt.
+            receipt = retrieved.isoformat() if retrieved else hashlib.sha256(content).hexdigest()
             receipt_key = f"{namespace}:{path.resolve()}:{receipt}"
         id_digest = hashlib.sha256(f"{receipt_key}\0{path.resolve()}".encode()).hexdigest()[:12]
         input_id = f"{path.stem[:80]}-{id_digest}"
@@ -102,7 +106,7 @@ def load_files(
             Source(
                 input_id=input_id,
                 acquisition_key=receipt_key,
-                content=path.read_bytes(),
+                content=content,
                 media_type=media_type,
                 namespace=namespace,
                 retrieved_at=retrieved,

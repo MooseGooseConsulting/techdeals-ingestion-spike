@@ -29,12 +29,17 @@ def fingerprint(settings: ParserSettings) -> str:
     package_dir = Path(__file__).resolve().parent
     repository = package_dir.parents[1]
     digest = hashlib.sha256(settings.model_dump_json().encode())
-    for path in (
+    paths = [
         package_dir / "parser.py",
         package_dir / "models.py",
         package_dir / "settings.py",
-        repository / "uv.lock",
-    ):
+    ]
+    lock = repository / "uv.lock"
+    if lock.is_file():
+        paths.append(lock)
+    else:
+        digest.update(b"uv.lock-unavailable")
+    for path in paths:
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
