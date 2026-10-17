@@ -194,7 +194,7 @@ def main():
                 (json.dumps(record, ensure_ascii=False, indent=2) + "\n").encode(),
                 "application/json",
                 "ebay",
-                str(args.archive) + "!" + MEMBER,
+                args.archive.name + "!" + MEMBER,
                 None,
                 "parsed_raw_fragment",
                 f"zero-based JSON array index {index}; JSON reserialized, not original bytes",
