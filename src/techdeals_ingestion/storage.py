@@ -343,9 +343,20 @@ class Store:
         if result is not None:
             source_ids = {source.input_id for source in sources}
             for entry in result.entries:
+                accepted_inputs = set()
                 for ref in entry.source_refs:
                     if ref.input_id not in source_ids:
                         raise ValueError(f"entry references an unknown input: {ref.input_id}")
+                    accepted_inputs.add(ref.input_id)
+                nested_refs = [("price", price.source_refs) for price in entry.prices] + [
+                    ("source date", source_date.source_refs) for source_date in entry.source_dates
+                ]
+                for label, refs in nested_refs:
+                    for ref in refs:
+                        if ref.input_id not in accepted_inputs:
+                            raise ValueError(
+                                f"{label} references an input outside the entry: {ref.input_id}"
+                            )
             for issue in result.issues:
                 if issue.input_id not in source_ids:
                     raise ValueError(f"source issue references an unknown input: {issue.input_id}")
@@ -518,6 +529,6 @@ def _identity_key(entry: Entry, source_rows: list[dict[str, Any]]) -> str | None
                 "seller": entry.seller,
             }
         )
-    if entry.sku:
-        return _digest({"namespace": namespace, "sku": entry.sku, "seller": entry.seller})
+    # A SKU names a product, not an offer. Without a native id there is no verified
+    # offer URL to separate two listings, so they stay unresolved.
     return None
