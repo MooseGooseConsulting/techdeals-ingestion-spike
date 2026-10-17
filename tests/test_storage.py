@@ -15,11 +15,13 @@ from techdeals_ingestion.models import (
 )
 from techdeals_ingestion.storage import (
     Store,
+    _digest,
     _identity_key,
     _meaning,
     _rebind_mapping,
     _safe_error,
     _typed_source_refs,
+    _without_legacy_sku_identity,
     semantic_key,
 )
 
@@ -205,6 +207,57 @@ def test_current_view_keeps_compatible_facts_and_partial_replacements():
     assert "c.observed_at = ch.observed_at" in view
     assert "p.ordinal" not in view
     assert "ORDER BY price_fact" in view
+    assert "WITH ORDINALITY" not in view
+    assert "ORDER BY date_fact" in view
+
+
+def test_legacy_sku_identity_is_not_current_after_a_later_capture():
+    namespace = "shop"
+    earlier_key = _digest({"namespace": namespace, "seller": "ada", "sku": "SSD-1"})
+    earlier = {
+        "identity_key": earlier_key,
+        "native_id": None,
+        "sku": "SSD-1",
+        "seller": "ada",
+        "namespace": namespace,
+        "amount": Decimal(100),
+        "observed_at": datetime(2026, 1, 1, tzinfo=UTC),
+    }
+    later = {
+        "identity_key": None,
+        "native_id": None,
+        "sku": "SSD-1",
+        "seller": "ada",
+        "namespace": namespace,
+        "amount": Decimal(80),
+        "observed_at": datetime(2026, 2, 1, tzinfo=UTC),
+    }
+    cleared = [_without_legacy_sku_identity(earlier), _without_legacy_sku_identity(later)]
+    current_amounts = [row["amount"] for row in cleared if row["identity_key"] is not None]
+    assert Decimal(100) not in current_amounts
+    assert current_amounts == []
+    native = Entry(
+        source_refs=[SourceRef(input_id="capture")],
+        native_id="post-1",
+        seller="ada",
+        sku="SSD-1",
+    )
+    native_key = _identity_key(native, [{"namespace": namespace}])
+    kept = _without_legacy_sku_identity(
+        {
+            "identity_key": native_key,
+            "native_id": "post-1",
+            "sku": "SSD-1",
+            "seller": "ada",
+            "namespace": namespace,
+            "amount": Decimal(100),
+        }
+    )
+    assert kept["identity_key"] == native_key
+    sql = Path("src/techdeals_ingestion/schema.sql").read_text()
+    assert "SET identity_key = NULL" in sql
+    assert "e.native_id IS NULL" in sql
+    assert '{"namespace":%s,"seller":%s,"sku":%s}' in sql
 
 
 def test_failure_message_redacts_common_inline_credentials():
