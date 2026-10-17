@@ -7,13 +7,16 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
+import tomllib
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .models import Extraction, SourceIssue
 from .settings import ParserSettings
 from .sources import SourcePackage, load_files, load_manifest
-from .storage import VIEWS, Store
+from .storage import VIEWS, Store, _safe_error
 
 
 def _json(value: Any) -> str:
@@ -22,10 +25,33 @@ def _json(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False, default=str) + "\n"
 
 
+def _target_config_path() -> Path:
+    candidates = (
+        Path.cwd() / "config" / "neon.toml",
+        Path(__file__).resolve().parents[2] / "config" / "neon.toml",
+    )
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise ValueError("Cannot verify DATABASE_URL without config/neon.toml")
+
+
+def _require_exercise_target(dsn: str) -> None:
+    """Refuse writes unless the URL is the direct or pooled exercise database."""
+    target = tomllib.loads(_target_config_path().read_text())
+    parsed = urlsplit(dsn)
+    host = target["host"]
+    endpoint, domain = host.split(".", 1)
+    allowed = {host, f"{endpoint}-pooler.{domain}"}
+    if parsed.hostname not in allowed or parsed.path != "/" + target["database"]:
+        raise ValueError("DATABASE_URL is outside the configured exercise database")
+
+
 def _store() -> Store:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise ValueError("Supply DATABASE_URL through the process environment")
+    _require_exercise_target(dsn)
     return Store(dsn)
 
 
@@ -78,20 +104,24 @@ def _snapshot(store: Store, view: str, attempt_id: str) -> list[dict[str, Any]]:
 
 
 async def _ingest(args) -> int:
+    settings = ParserSettings.load(args.config)
+    from . import parser
+
+    parser_key = parser.fingerprint(settings)
     destination = Path(args.output)
     if destination.exists():
         raise ValueError("Choose a new output directory so each run remains inspectable")
     destination.mkdir(parents=True)
     trace_dir = destination / "trace"
     trace_dir.mkdir()
-    package = _package(args)
-    sources = package.sources
-    store = _store()
-    store.retain(sources)
-    settings = ParserSettings.load(args.config)
-    from . import parser
-
-    parser_key = parser.fingerprint(settings)
+    try:
+        package = _package(args)
+        sources = package.sources
+        store = _store()
+        store.retain(sources)
+    except Exception:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
     report: dict[str, Any] = {
         "package": package.package_id,
         "sources": [_safe_source(source) for source in sources],
@@ -140,14 +170,10 @@ async def _ingest(args) -> int:
             else "completed"
         )
         (destination / "result.json").write_text(_json(result))
-        entries = _snapshot(store, "entries", saved["attempt_id"])
-        prices = _snapshot(store, "prices", saved["attempt_id"])
-        (destination / "database-entries.json").write_text(_json(entries))
-        (destination / "database-prices.json").write_text(_json(prices))
-        report["database_entries"] = len(entries)
-        report["database_prices"] = len(prices)
     except Exception as exc:  # noqa: BLE001 - preserve failed attempts for provider and output errors
         error = {"type": type(exc).__name__}
+        if isinstance(exc, ValueError):
+            error["message"] = _safe_error(str(exc))
         status_code = getattr(exc, "status_code", None)
         if isinstance(status_code, int):
             error["status_code"] = status_code
@@ -156,11 +182,23 @@ async def _ingest(args) -> int:
         report.update(saved)
         report["status"] = "failed"
         result = None
+    else:
+        try:
+            entries = _snapshot(store, "entries", saved["attempt_id"])
+            prices = _snapshot(store, "prices", saved["attempt_id"])
+            (destination / "database-entries.json").write_text(_json(entries))
+            (destination / "database-prices.json").write_text(_json(prices))
+            report["database_entries"] = len(entries)
+            report["database_prices"] = len(prices)
+        except Exception as exc:  # noqa: BLE001 - snapshot failure must not replace a saved extraction
+            report["snapshot_error"] = {"type": type(exc).__name__}
     if result is None:
         (destination / "result.json").write_text(_json({"status": "failed"}))
     (destination / "report.json").write_text(_json(report))
     print(_json(report), end="")
-    return 1 if report["status"] != "completed" else 0
+    if report["status"] != "completed" or report.get("snapshot_error"):
+        return 1
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
