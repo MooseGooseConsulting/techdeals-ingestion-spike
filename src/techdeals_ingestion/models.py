@@ -1,8 +1,9 @@
 """Source receipts and ordinary extracted fields; application IDs stay outside model output."""
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -19,6 +20,32 @@ class Source:
     url: str | None = None
     linked_group: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+_FORMATTED_PRICE = re.compile(
+    r"""
+    ^\s*
+    (?:(?P<prefix>[A-Z]{3}|[$\u20ac\u00a3\u00a5])\s*)?
+    (?P<sign>-)?
+    (?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)
+    (?:\s*(?P<suffix>[A-Z]{3}))?
+    \s*$
+    """,
+    re.VERBOSE,
+)
+
+
+def _formatted_price_amount(original: str) -> Decimal | None:
+    """Read a plain or simply formatted price. Free text stays unparsed."""
+    match = _FORMATTED_PRICE.fullmatch(original.strip())
+    if match is None:
+        return None
+    number = match.group("number").replace(",", "")
+    sign = "-" if match.group("sign") else ""
+    amount = Decimal(f"{sign}{number}")
+    if not amount.is_finite():
+        return None
+    return amount
 
 
 class Output(BaseModel):
@@ -73,12 +100,11 @@ class Price(Output):
 
     @model_validator(mode="after")
     def amount_matches_plain_numeric_original(self) -> "Price":
-        try:
-            original_amount = Decimal(self.original.strip())
-        except InvalidOperation:
+        original_amount = _formatted_price_amount(self.original)
+        if original_amount is None:
             return self
-        if original_amount.is_finite() and self.amount != original_amount:
-            raise ValueError("amount must match a plain numeric original price")
+        if self.amount != original_amount:
+            raise ValueError("amount must match the original price")
         return self
 
 

@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from techdeals_ingestion.models import (
     Entry,
     Extraction,
@@ -12,6 +14,7 @@ from techdeals_ingestion.models import (
     SourceRef,
 )
 from techdeals_ingestion.storage import (
+    Store,
     _identity_key,
     _meaning,
     _rebind_mapping,
@@ -162,6 +165,30 @@ def test_sku_correction_stays_inside_the_stable_listing_identity():
     assert _identity_key(first, rows) != _identity_key(
         first.model_copy(update={"native_id": "post-2"}), rows
     )
+    shared_sku = Entry(
+        source_refs=[SourceRef(input_id="capture")],
+        seller="ada",
+        sku="SSD-1",
+    )
+    assert _identity_key(shared_sku, rows) is None
+    assert _identity_key(shared_sku.model_copy(update={"title": "second drive"}), rows) is None
+
+
+def test_save_rejects_nested_refs_outside_the_entry():
+    captured = source("capture-a", "fetch-a")
+    entry = Entry(
+        source_refs=[SourceRef(input_id="capture-a")],
+        prices=[
+            Price(
+                original="$20",
+                kind="ask",
+                amount="20",
+                source_refs=[SourceRef(input_id="capture-b")],
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="outside the entry"):
+        Store("postgresql://unused").save([captured], Extraction(entries=[entry]), "parser")
 
 
 def test_current_view_keeps_compatible_facts_and_partial_replacements():
@@ -173,6 +200,11 @@ def test_current_view_keeps_compatible_facts_and_partial_replacements():
     assert "count(DISTINCT f.fact_key)" in view
     assert "d - 'source_refs'" in view
     assert "AND identity_key IS NOT NULL" in view
+    assert "JOIN ingest_entries e ON e.entry_id = ch.entry_id" in view
+    assert "c.identity_key = ch.identity_key" in view
+    assert "c.observed_at = ch.observed_at" in view
+    assert "p.ordinal" not in view
+    assert "ORDER BY price_fact" in view
 
 
 def test_failure_message_redacts_common_inline_credentials():

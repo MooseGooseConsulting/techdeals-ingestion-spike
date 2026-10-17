@@ -179,17 +179,19 @@ WITH eligible AS (
                FROM jsonb_array_elements(k.source_dates) WITH ORDINALITY AS dated(d, ordinality)
              ), '[]'::jsonb),
              'prices', COALESCE((
-               SELECT jsonb_agg(jsonb_build_object(
-                 'ordinal', p.ordinal,
-                 'amount', p.amount,
-                 'currency', p.currency,
-                 'original', p.original,
-                 'kind', p.kind,
-                 'basis', p.basis,
-                 'conditions', p.conditions
-               ) ORDER BY p.ordinal)
-               FROM ingest_price_rows p
-               WHERE p.entry_id = k.entry_id
+               SELECT jsonb_agg(price_fact ORDER BY price_fact)
+               FROM (
+                 SELECT jsonb_build_object(
+                   'amount', p.amount,
+                   'currency', p.currency,
+                   'original', p.original,
+                   'kind', p.kind,
+                   'basis', p.basis,
+                   'conditions', p.conditions
+                 ) AS price_fact
+                 FROM ingest_price_rows p
+                 WHERE p.entry_id = k.entry_id
+               ) priced
              ), '[]'::jsonb)
            ))::text) AS fact_key
     FROM kept k
@@ -211,9 +213,11 @@ WITH eligible AS (
     ORDER BY f.identity_key, f.fact_key, f.imported_at DESC, f.entry_id
 )
 SELECT e.*, COALESCE(c.equal_time_conflict, false) AS equal_time_conflict
-FROM chosen
-JOIN ingest_entries e USING (entry_id)
-LEFT JOIN conflicts c USING (identity_key, observed_at);
+FROM chosen ch
+JOIN ingest_entries e ON e.entry_id = ch.entry_id
+LEFT JOIN conflicts c
+  ON c.identity_key = ch.identity_key
+ AND c.observed_at = ch.observed_at;
 
 CREATE VIEW ingest_current_prices AS
 SELECT p.*, c.equal_time_conflict
