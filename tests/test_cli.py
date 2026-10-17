@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from techdeals_ingestion import cli
 from techdeals_ingestion import parser as parser_module
 from techdeals_ingestion.models import Entry, Extraction, Price, SourceRef
@@ -162,3 +164,110 @@ async def test_provider_exception_text_is_never_saved_or_reported(tmp_path, monk
     assert "TOP_SECRET_KEY" not in report_text
     report = json.loads(report_text)
     assert report["error"] == {"type": "ProviderFailure", "status_code": 502}
+
+
+async def test_validation_failure_keeps_a_sanitized_message(tmp_path, monkeypatch):
+    path = tmp_path / "item.txt"
+    path.write_text("native item")
+    output = tmp_path / "run"
+
+    class Settings:
+        def model_dump(self, **kwargs):
+            return {}
+
+    class Store:
+        def retain(self, sources):
+            pass
+
+        def cached(self, sources, key):
+            return None
+
+        def save(self, sources, result, key, **kwargs):
+            return {"attempt_id": "failed-attempt", "saved_entries": 0}
+
+        def query(self, view, **filters):
+            raise AssertionError("failed extraction must not query entries")
+
+    monkeypatch.setattr(parser_module, "fingerprint", lambda settings: "key")
+
+    async def parse(*args):
+        raise ValueError("batch exceeds max_input_bytes; token=secret-value")
+
+    monkeypatch.setattr(parser_module, "parse", parse)
+    monkeypatch.setattr(cli, "_store", lambda: Store())
+    monkeypatch.setattr(cli.ParserSettings, "load", lambda path: Settings())
+
+    assert await cli._ingest(args_for(path, output)) == 1
+    report = json.loads((output / "report.json").read_text())
+    assert report["error"]["type"] == "ValueError"
+    assert "max_input_bytes" in report["error"]["message"]
+    assert "secret-value" not in report["error"]["message"]
+
+
+async def test_snapshot_failure_preserves_the_saved_extraction(tmp_path, monkeypatch):
+    path = tmp_path / "item.json"
+    path.write_bytes(b'{"title":"Disk"}')
+    output = tmp_path / "run"
+    saves = []
+
+    class Settings:
+        def model_dump(self, **kwargs):
+            return {}
+
+    class Store:
+        def retain(self, sources):
+            pass
+
+        def cached(self, sources, key):
+            return None
+
+        def save(self, sources, result, key, **kwargs):
+            saves.append(result is not None)
+            return {"attempt_id": "attempt-1", "saved_entries": 1}
+
+        def query(self, view, **filters):
+            raise RuntimeError("snapshot dropped")
+
+    async def parse(sources, settings, trace_dir):
+        return Extraction(
+            entries=[Entry(source_refs=[SourceRef(input_id=sources[0].input_id)], title="Disk")]
+        )
+
+    monkeypatch.setattr(parser_module, "fingerprint", lambda settings: "parser-key")
+    monkeypatch.setattr(parser_module, "parse", parse)
+    monkeypatch.setattr(cli, "_store", lambda: Store())
+    monkeypatch.setattr(cli.ParserSettings, "load", lambda path: Settings())
+
+    assert await cli._ingest(args_for(path, output)) == 1
+    assert saves == [True]
+    assert json.loads((output / "result.json").read_text())["entries"][0]["title"] == "Disk"
+    report = json.loads((output / "report.json").read_text())
+    assert report["status"] == "completed"
+    assert report["attempt_id"] == "attempt-1"
+    assert report["snapshot_error"] == {"type": "RuntimeError"}
+
+
+async def test_invalid_config_does_not_leave_an_output_directory(tmp_path):
+    path = tmp_path / "item.txt"
+    path.write_text("native")
+    output = tmp_path / "run"
+    with pytest.raises(FileNotFoundError):
+        await cli._ingest(args_for(path, output, config=str(tmp_path / "missing.toml")))
+    assert not output.exists()
+
+
+def test_store_rejects_database_outside_exercise_target(tmp_path, monkeypatch):
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "neon.toml").write_text(
+        'project_id = "p"\n'
+        'branch_id = "b"\n'
+        'database = "ingestion_spike"\n'
+        'role = "owner"\n'
+        'host = "ep-example.example.neon.tech"\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    cli._require_exercise_target("postgresql://ep-example.example.neon.tech/ingestion_spike")
+    cli._require_exercise_target("postgresql://ep-example-pooler.example.neon.tech/ingestion_spike")
+    with pytest.raises(ValueError, match="outside the configured exercise database"):
+        cli._require_exercise_target("postgresql://other.example/ingestion_spike")

@@ -48,16 +48,29 @@ def test_cache_rebinding_only_changes_typed_source_refs():
                 title="Server",
                 attributes={"vendor_payload": {"input_id": "old"}},
                 prices=[
-                    Price(amount=Decimal("12.50"), currency=None, original="$12.50", kind="ask")
+                    Price(
+                        amount=Decimal("12.50"),
+                        currency=None,
+                        original="$12.50",
+                        kind="ask",
+                        source_refs=[SourceRef(input_id="old", locator="json:/price")],
+                    )
                 ],
                 source_dates=[
-                    SourceDate(original_field="ends", value="2026-11-01", meaning="auction end")
+                    SourceDate(
+                        original_field="ends",
+                        value="2026-11-01",
+                        meaning="auction end",
+                        source_refs=[SourceRef(input_id="old")],
+                    )
                 ],
             )
         ],
     )
     rebound = _typed_source_refs(extraction, {"old": "new"})
     assert rebound.entries[0].source_refs[0].input_id == "new"
+    assert rebound.entries[0].prices[0].source_refs[0].input_id == "new"
+    assert rebound.entries[0].source_dates[0].source_refs[0].input_id == "new"
     assert rebound.issues[0].input_id == "new"
     assert rebound.entries[0].attributes == {"vendor_payload": {"input_id": "old"}}
     assert rebound.entries[0].prices[0].amount == Decimal("12.50")

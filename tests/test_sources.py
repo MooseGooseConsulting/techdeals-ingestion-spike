@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -53,6 +54,27 @@ def test_rescraped_file_gets_stable_acquisition_specific_input_ids(tmp_path):
     assert first.sources[0].input_id == same_receipt.sources[0].input_id
     assert first.sources[0].input_id != later_receipt.sources[0].input_id
     assert first.sources[0].metadata["filename"] == path.name
+
+
+def test_repeated_import_ignores_mtime_and_duplicate_basenames_stay_distinct(tmp_path):
+    first_dir = tmp_path / "vendor-a"
+    second_dir = tmp_path / "vendor-b"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first = first_dir / "items.json"
+    second = second_dir / "items.json"
+    first.write_text("same")
+    second.write_text("same")
+    loaded = load_files([first, second], namespace="shop", acquisition_key="batch")
+    assert loaded.sources[0].acquisition_key != loaded.sources[1].acquisition_key
+    solo = tmp_path / "one.txt"
+    solo.write_text("raw")
+    before = load_files([solo], namespace="shop")
+    updated = solo.stat().st_mtime + 10
+    os.utime(solo, (updated, updated))
+    after = load_files([solo], namespace="shop")
+    assert before.sources[0].acquisition_key == after.sources[0].acquisition_key
+    assert before.sources[0].input_id == after.sources[0].input_id
 
 
 def test_manifest_package_uses_native_files_and_keeps_unknown_time_unknown():
