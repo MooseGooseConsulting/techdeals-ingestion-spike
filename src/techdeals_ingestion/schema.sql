@@ -96,8 +96,11 @@ CREATE TABLE IF NOT EXISTS ingest_price_rows (
     kind text NOT NULL,
     basis text,
     conditions text,
+    source_refs jsonb NOT NULL DEFAULT '[]'::jsonb,
     PRIMARY KEY(entry_id, ordinal)
 );
+ALTER TABLE ingest_price_rows
+    ADD COLUMN IF NOT EXISTS source_refs jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS ingest_entry_sources (
     entry_id text NOT NULL REFERENCES ingest_entry_rows(entry_id),
@@ -109,6 +112,8 @@ CREATE TABLE IF NOT EXISTS ingest_entry_sources (
 CREATE VIEW ingest_entries AS
 SELECT e.*, a.parser_key, a.reuse_of, a.created_at AS imported_at,
        COALESCE(src.input_ids, '[]'::jsonb) AS input_ids,
+       COALESCE(src.source_refs, '[]'::jsonb) AS source_refs,
+       COALESCE(src.acquisition_keys, '[]'::jsonb) AS acquisition_keys,
        src.namespace
 FROM ingest_entry_rows e
 JOIN ingest_attempts a USING (attempt_id)
@@ -116,6 +121,7 @@ LEFT JOIN LATERAL (
     SELECT jsonb_agg(DISTINCT s.input_id ORDER BY s.input_id) AS input_ids,
            jsonb_agg(jsonb_build_object('input_id',s.input_id,'locator',NULLIF(es.locator,''))
                      ORDER BY s.input_id, es.locator) AS source_refs,
+           jsonb_agg(DISTINCT s.acquisition_key ORDER BY s.acquisition_key) AS acquisition_keys,
            CASE WHEN count(DISTINCT s.namespace) = 1 THEN min(s.namespace) END AS namespace
     FROM ingest_entry_sources es JOIN ingest_sources s USING (input_id)
     WHERE es.entry_id = e.entry_id
@@ -125,7 +131,8 @@ CREATE VIEW ingest_prices AS
 SELECT p.*, e.attempt_id, e.title, e.native_id, e.variant_id, e.sku, e.url,
        e.seller, e.location, e.condition, e.availability, e.attributes,
        e.source_dates, e.issues, e.identity_key, e.observed_at, e.has_reported_issues,
-       e.parser_key, e.reuse_of, e.imported_at, e.input_ids, e.namespace
+       e.parser_key, e.reuse_of, e.imported_at, e.input_ids, e.source_refs AS entry_source_refs,
+       e.acquisition_keys, e.namespace
 FROM ingest_price_rows p JOIN ingest_entries e USING (entry_id);
 
 CREATE VIEW ingest_history AS
@@ -135,22 +142,37 @@ SELECT e.*,
 FROM ingest_entries e;
 
 CREATE VIEW ingest_current_entries AS
-WITH dated AS (
+WITH eligible AS (
     SELECT * FROM ingest_entries
-    WHERE identity_key IS NOT NULL AND observed_at IS NOT NULL AND NOT has_reported_issues
-), latest AS (
-    SELECT d.*, dense_rank() OVER (PARTITION BY identity_key ORDER BY observed_at DESC) AS date_rank
-    FROM dated d
-), latest_states AS (
-    SELECT DISTINCT ON (identity_key, observed_at, semantic_hash) *
-    FROM latest WHERE date_rank=1
-    ORDER BY identity_key, observed_at, semantic_hash, entry_id
+    WHERE observed_at IS NOT NULL AND NOT has_reported_issues
+), attempt_latest AS (
+    SELECT acquisition_keys, max(imported_at) AS imported_at
+    FROM eligible
+    GROUP BY acquisition_keys
+), fresh AS (
+    SELECT e.*
+    FROM eligible e
+    JOIN attempt_latest l
+      ON e.acquisition_keys = l.acquisition_keys AND e.imported_at = l.imported_at
+), latest_observed AS (
+    SELECT identity_key, max(observed_at) AS observed_at
+    FROM fresh
+    WHERE identity_key IS NOT NULL
+    GROUP BY identity_key
 ), conflicts AS (
-    SELECT identity_key, observed_at, count(DISTINCT semantic_hash)>1 AS equal_time_conflict
-    FROM latest WHERE date_rank=1 GROUP BY identity_key, observed_at
+    SELECT f.identity_key, f.observed_at,
+           count(DISTINCT f.semantic_hash) > 1
+           AND count(DISTINCT f.acquisition_keys) > 1 AS equal_time_conflict
+    FROM fresh f
+    JOIN latest_observed l USING (identity_key, observed_at)
+    GROUP BY f.identity_key, f.observed_at
 )
-SELECT s.*, c.equal_time_conflict
-FROM latest_states s JOIN conflicts c USING(identity_key, observed_at);
+SELECT DISTINCT ON (COALESCE(f.identity_key, f.entry_id), f.semantic_hash)
+       f.*, COALESCE(c.equal_time_conflict, false) AS equal_time_conflict
+FROM fresh f
+LEFT JOIN conflicts c USING (identity_key, observed_at)
+WHERE f.identity_key IS NULL OR c.identity_key IS NOT NULL
+ORDER BY COALESCE(f.identity_key, f.entry_id), f.semantic_hash, f.entry_id;
 
 CREATE VIEW ingest_current_prices AS
 SELECT p.*, c.equal_time_conflict
