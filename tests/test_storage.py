@@ -85,7 +85,27 @@ def test_entry_meaning_excludes_storage_refs_but_preserves_native_attributes_and
         source_dates=[SourceDate(original_field="published", value="yesterday")],
         prices=[Price(amount=Decimal("7.125"), currency="USD", original="$7.125", kind="ask")],
     )
-    later = first.model_copy(update={"source_refs": [SourceRef(input_id="new")]})
+    later = first.model_copy(
+        update={
+            "source_refs": [SourceRef(input_id="new")],
+            "prices": [
+                Price(
+                    amount=Decimal("7.125"),
+                    currency="USD",
+                    original="$7.125",
+                    kind="ask",
+                    source_refs=[SourceRef(input_id="new", locator="json:/price")],
+                )
+            ],
+            "source_dates": [
+                SourceDate(
+                    original_field="published",
+                    value="yesterday",
+                    source_refs=[SourceRef(input_id="new")],
+                )
+            ],
+        }
+    )
     assert _meaning(first) == _meaning(later)
     assert _meaning(first)["attributes"] == {"native": {"input_id": "part-of-source-data"}}
     assert _meaning(first) != _meaning(
