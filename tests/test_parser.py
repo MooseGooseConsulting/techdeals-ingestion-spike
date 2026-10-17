@@ -416,6 +416,16 @@ def test_formatted_price_amount_must_match_original():
         Price(original="$500", kind="ask", amount="5000")
     assert Price(original="$500", kind="ask", amount="500").amount == Decimal(500)
     assert Price(original="$1,250.50", kind="ask", amount="1250.50").amount == Decimal("1250.50")
+    for original, amount in (("1e3", "1000"), ("+14.99", "14.99"), (".99", "0.99")):
+        with pytest.raises(ValidationError):
+            Price(original=original, kind="ask", amount=None)
+        with pytest.raises(ValidationError):
+            Price(original=original, kind="ask", amount="10")
+        assert Price(original=original, kind="ask", amount=amount).amount == Decimal(amount)
+    for original in ("€20", "£20", "¥20"):
+        with pytest.raises(ValidationError):
+            Price(original=original, kind="ask", amount="30")
+        assert Price(original=original, kind="ask", amount="20").amount == Decimal(20)
 
 
 @pytest.mark.asyncio
@@ -707,6 +717,113 @@ async def test_json_unicode_price_text_is_decoded_before_citation_check(tmp_path
     )
     assert len(histories) == 2
     assert result.entries[0].prices[0].original == "$20"
+
+
+@pytest.mark.asyncio
+async def test_numeric_json_and_html_attribute_prices_are_cited(tmp_path):
+    leaf = []
+
+    async def numeric_leaf(messages, info):
+        leaf.append(messages)
+        original = "800" if len(leaf) == 1 else "799"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "numeric leaf",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": original,
+                            "source_refs": [
+                                {"input_id": "capture-1", "locator": "json:/offers/price"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    leaf_result = await parse(
+        [source(content=b'{"offers":{"price":799}}')],
+        ParserSettings.load(),
+        tmp_path / "leaf",
+        model=FunctionModel(stream_function=numeric_leaf),
+    )
+    assert len(leaf) == 2
+    assert leaf_result.entries[0].prices[0].original == "799"
+
+    parent = []
+
+    async def numeric_parent(messages, info):
+        parent.append(messages)
+        original = "10" if len(parent) == 1 else "799"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "numeric parent",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": original,
+                            "source_refs": [{"input_id": "capture-1", "locator": "json:/offers"}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    parent_result = await parse(
+        [source(content=b'{"offers":{"price":799}}')],
+        ParserSettings.load(),
+        tmp_path / "parent",
+        model=FunctionModel(stream_function=numeric_parent),
+    )
+    assert len(parent) == 2
+    assert parent_result.entries[0].prices[0].original == "799"
+
+    attribute = []
+
+    async def html_attribute(messages, info):
+        attribute.append(messages)
+        original = "499" if len(attribute) == 1 else "799"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "attribute price",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": original,
+                            "source_refs": [
+                                {
+                                    "input_id": "capture-1",
+                                    "locator": "html:meta[itemprop=price]",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    html = b'<meta itemprop="price" content="799"><span data-rate="499">other</span>'
+    attribute_result = await parse(
+        [source(content=html)],
+        ParserSettings.load(),
+        tmp_path / "html",
+        model=FunctionModel(stream_function=html_attribute),
+    )
+    assert len(attribute) == 2
+    assert attribute_result.entries[0].prices[0].original == "799"
 
 
 def test_output_models_keep_prices_nested_and_fields_ordinary():
