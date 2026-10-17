@@ -25,7 +25,7 @@ class Source:
 _FORMATTED_PRICE = re.compile(
     r"""
     ^\s*
-    (?:(?P<prefix>[A-Z]{3}|[$\u20ac\u00a3\u00a5])\s*)?
+    (?:(?P<prefix>[A-Z]{3}|[$])\s*)?
     (?P<sign>-)?
     (?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)
     (?:\s*(?P<suffix>[A-Z]{3}))?
