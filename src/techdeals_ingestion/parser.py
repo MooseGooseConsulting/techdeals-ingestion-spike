@@ -26,7 +26,7 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.usage import UsageLimits
 
-from .models import Entry, Extraction, Price, Source, SourceIssue
+from .models import Entry, Extraction, Price, Source, SourceIssue, SourceRef
 from .settings import ParserSettings, fingerprint
 
 _INSTRUCTIONS = """Extract useful listing entries from the supplied native source blocks.
@@ -103,19 +103,22 @@ def _prompt(sources: list[Source], secret: str | None) -> str:
     return "\n".join(blocks)
 
 
-def _json_pointer_exists(text: str, pointer: str) -> bool:
+_MISSING = object()
+
+
+def _json_at(text: str, pointer: str) -> Any:
     try:
         value: Any = json.loads(text)
     except (json.JSONDecodeError, UnicodeError):
-        return False
+        return _MISSING
     if pointer == "":
-        return True
+        return value
     if not pointer.startswith("/"):
-        return False
+        return _MISSING
     tokens = []
     for token in pointer[1:].split("/"):
         if re.search(r"~(?![01])", token):
-            return False
+            return _MISSING
         tokens.append(token.replace("~1", "/").replace("~0", "~"))
     for token in tokens:
         if isinstance(value, dict) and token in value:
@@ -130,8 +133,12 @@ def _json_pointer_exists(text: str, pointer: str) -> bool:
             if index < len(value):
                 value = value[index]
                 continue
-        return False
-    return True
+        return _MISSING
+    return value
+
+
+def _json_pointer_exists(text: str, pointer: str) -> bool:
+    return _json_at(text, pointer) is not _MISSING
 
 
 def _locator_error(source: Source, locator: str) -> str | None:
@@ -177,10 +184,101 @@ def _capture_text(source: Source) -> str:
     return source.content.decode("utf-8", errors="replace")
 
 
-def _price_missing_captures(price: Price, sources: list[Source]) -> list[Source]:
-    """A citation is valid only when that capture actually contains the price text."""
+def _string_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        texts: list[str] = []
+        for item in value.values():
+            texts.extend(_string_values(item))
+        return texts
+    if isinstance(value, list):
+        texts: list[str] = []
+        for item in value:
+            texts.extend(_string_values(item))
+        return texts
+    return []
+
+
+def _complete_price_match(original: str, text: str) -> bool:
+    """Accept the whole price, not a prefix of a longer amount such as $20 inside $200."""
+    if not original:
+        return False
+    start = 0
+    while True:
+        index = text.find(original, start)
+        if index < 0:
+            return False
+        end = index + len(original)
+        before = text[index - 1] if index else ""
+        after = text[end] if end < len(text) else ""
+        preceded = before.isdigit() and original[0].isdigit()
+        continues = after.isdigit() or (
+            after in {".", ","} and end + 1 < len(text) and text[end + 1].isdigit()
+        )
+        if not preceded and not continues:
+            return True
+        start = index + 1
+
+
+def _decoded_json_strings(source: Source) -> list[str]:
+    media = source.media_type.split(";", 1)[0].strip().lower()
+    if media not in {"application/json", "text/json"}:
+        return []
+    parsed = _json_at(_capture_text(source), "")
+    if parsed is _MISSING:
+        return []
+    return _string_values(parsed)
+
+
+def _locator_texts(source: Source, locator: str) -> list[str]:
+    """Texts belonging to a resolved locator. An unresolved locator selects nothing."""
+    native = _capture_text(source)
+    if locator.startswith("json:"):
+        selected = _json_at(native, locator[5:])
+        if selected is _MISSING:
+            return []
+        return _string_values(selected)
+    if locator.startswith("html:"):
+        selector = locator[5:]
+        try:
+            nodes = BeautifulSoup(native, "html.parser").select(selector) if selector else []
+        except Exception as exc:
+            if type(exc).__name__ in {"SelectorSyntaxError", "NotImplementedError"}:
+                return []
+            raise
+        return [node.get_text(" ", strip=False) for node in nodes]
+    if locator.startswith("exact:"):
+        text = locator[6:]
+        if text and _complete_price_match(text, native):
+            return [text]
+        return []
+    return []
+
+
+def _price_in_source(price: Price, source: Source, refs: list[SourceRef]) -> bool:
+    """A cited locator must contain the whole price. A bare citation cannot be a partial amount."""
     original = price.original.strip()
-    return [source for source in sources if original not in _capture_text(source)]
+    located = [ref for ref in refs if ref.locator]
+    if located:
+        return any(
+            _complete_price_match(original, text)
+            for ref in located
+            for text in _locator_texts(source, ref.locator or "")
+        )
+    texts = [_capture_text(source), *_decoded_json_strings(source)]
+    return any(_complete_price_match(original, text) for text in texts)
+
+
+def _price_missing_captures(
+    price: Price, sources: list[Source], refs: list[SourceRef]
+) -> list[Source]:
+    missing = []
+    for source in sources:
+        source_refs = [ref for ref in refs if ref.input_id == source.input_id]
+        if not _price_in_source(price, source, source_refs):
+            missing.append(source)
+    return missing
 
 
 def _nested_evidence_problems(
@@ -217,7 +315,7 @@ def _nested_evidence_problems(
                         problems.append(f"entry {entry_index} {label} {index}: {error}")
             if label == "price":
                 supporting = cited or known_inputs
-                for source in _price_missing_captures(value, supporting):
+                for source in _price_missing_captures(value, supporting, value.source_refs):
                     problems.append(
                         f"entry {entry_index} price {index} is not present in "
                         f"cited input {source.input_id!r}"
