@@ -20,7 +20,12 @@ from techdeals_ingestion.parser import _request_hook, parse
 from techdeals_ingestion.settings import ParserSettings, fingerprint
 
 
-def source(input_id="capture-1", content=b'{"name":"RTX 4070","ask":"$500"}'):
+def source(
+    input_id="capture-1",
+    content=b'{"name":"RTX 4070","ask":"$500"}',
+    *,
+    linked_group=None,
+):
     return Source(
         input_id=input_id,
         acquisition_key=f"capture:{input_id}",
@@ -29,6 +34,7 @@ def source(input_id="capture-1", content=b'{"name":"RTX 4070","ask":"$500"}'):
         namespace="marketplace",
         retrieved_at=datetime(2026, 10, 16, tzinfo=UTC),
         url="https://example.test/listing/1",
+        linked_group=linked_group,
         metadata={"route": "search"},
     )
 
@@ -186,8 +192,8 @@ async def test_exhausted_validation_preserves_valid_entries_and_marks_uncovered_
 @pytest.mark.asyncio
 async def test_source_refs_validate_json_pointer_html_css_and_exact_text(tmp_path):
     inputs = [
-        source(content=b'{"a/b":{"~key":["selected"]}}'),
-        source("capture-2", b"<div class='card'>Selected item</div>"),
+        source(content=b'{"a/b":{"~key":["selected"]}}', linked_group="listing"),
+        source("capture-2", b"<div class='card'>Selected item</div>", linked_group="listing"),
     ]
 
     async def respond(messages, info):
@@ -452,6 +458,95 @@ def test_settings_are_small_strict_and_fingerprint_stable(tmp_path):
         path.write_text(invalid)
         with pytest.raises(ValidationError):
             ParserSettings.load(path)
+
+
+@pytest.mark.asyncio
+async def test_unlinked_inputs_cannot_share_an_entry(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        if len(histories) == 1:
+            yield output_call(
+                info,
+                [
+                    {
+                        "source_refs": [
+                            {"input_id": "capture-1"},
+                            {"input_id": "capture-2"},
+                        ],
+                        "title": "merged",
+                    }
+                ],
+            )
+        else:
+            yield output_call(
+                info,
+                [
+                    {"source_refs": [{"input_id": "capture-1"}], "title": "one"},
+                    {"source_refs": [{"input_id": "capture-2"}], "title": "two"},
+                ],
+            )
+
+    result = await parse(
+        [source(), source("capture-2", b'{"name":"other"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+
+    assert len(histories) == 2
+    assert [entry.title for entry in result.entries] == ["one", "two"]
+
+
+@pytest.mark.asyncio
+async def test_multi_input_price_requires_its_own_source_ref(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        price = {"original": "$20", "kind": "ask", "amount": "20"}
+        if len(histories) == 1:
+            yield output_call(
+                info,
+                [
+                    {
+                        "source_refs": [
+                            {"input_id": "capture-1"},
+                            {"input_id": "capture-2"},
+                        ],
+                        "title": "bundle",
+                        "prices": [price],
+                    }
+                ],
+            )
+        else:
+            yield output_call(
+                info,
+                [
+                    {
+                        "source_refs": [
+                            {"input_id": "capture-1"},
+                            {"input_id": "capture-2"},
+                        ],
+                        "title": "bundle",
+                        "prices": [price | {"source_refs": [{"input_id": "capture-1"}]}],
+                    }
+                ],
+            )
+
+    result = await parse(
+        [
+            source(linked_group="listing"),
+            source("capture-2", b'{"name":"other"}', linked_group="listing"),
+        ],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+
+    assert len(histories) == 2
+    assert result.entries[0].prices[0].source_refs[0].input_id == "capture-1"
 
 
 def test_output_models_keep_prices_nested_and_fields_ordinary():
