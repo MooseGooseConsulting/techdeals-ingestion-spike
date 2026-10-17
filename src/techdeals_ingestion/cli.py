@@ -11,7 +11,7 @@ import shutil
 import tomllib
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .models import Extraction, SourceIssue
 from .settings import ParserSettings
@@ -26,14 +26,14 @@ def _json(value: Any) -> str:
 
 
 def _target_config_path() -> Path:
-    candidates = (
-        Path.cwd() / "config" / "neon.toml",
-        Path(__file__).resolve().parents[2] / "config" / "neon.toml",
-    )
-    for path in candidates:
-        if path.is_file():
-            return path
+    """Use the repository target. A working-directory copy must not redirect writes."""
+    path = Path(__file__).resolve().parents[2] / "config" / "neon.toml"
+    if path.is_file():
+        return path
     raise ValueError("Cannot verify DATABASE_URL without config/neon.toml")
+
+
+_TARGET_OVERRIDE_PARAMETERS = frozenset({"host", "hostaddr", "port", "dbname"})
 
 
 def _require_exercise_target(dsn: str) -> None:
@@ -43,7 +43,12 @@ def _require_exercise_target(dsn: str) -> None:
     host = target["host"]
     endpoint, domain = host.split(".", 1)
     allowed = {host, f"{endpoint}-pooler.{domain}"}
-    if parsed.hostname not in allowed or parsed.path != "/" + target["database"]:
+    overrides = {key.lower() for key in parse_qs(parsed.query, keep_blank_values=True)}
+    if (
+        parsed.hostname not in allowed
+        or parsed.path != "/" + target["database"]
+        or overrides & _TARGET_OVERRIDE_PARAMETERS
+    ):
         raise ValueError("DATABASE_URL is outside the configured exercise database")
 
 

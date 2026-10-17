@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -257,17 +258,36 @@ async def test_invalid_config_does_not_leave_an_output_directory(tmp_path):
 
 
 def test_store_rejects_database_outside_exercise_target(tmp_path, monkeypatch):
-    config = tmp_path / "config"
-    config.mkdir()
-    (config / "neon.toml").write_text(
+    config = tmp_path / "neon.toml"
+    config.write_text(
         'project_id = "p"\n'
         'branch_id = "b"\n'
         'database = "ingestion_spike"\n'
         'role = "owner"\n'
         'host = "ep-example.example.neon.tech"\n'
     )
-    monkeypatch.chdir(tmp_path)
-    cli._require_exercise_target("postgresql://ep-example.example.neon.tech/ingestion_spike")
-    cli._require_exercise_target("postgresql://ep-example-pooler.example.neon.tech/ingestion_spike")
+    monkeypatch.setattr(cli, "_target_config_path", lambda: config)
+    direct = "postgresql://ep-example.example.neon.tech/ingestion_spike"
+    pooled = "postgresql://ep-example-pooler.example.neon.tech/ingestion_spike"
+    cli._require_exercise_target(direct)
+    cli._require_exercise_target(pooled)
     with pytest.raises(ValueError, match="outside the configured exercise database"):
         cli._require_exercise_target("postgresql://other.example/ingestion_spike")
+
+
+def test_target_config_ignores_working_directory_copy(tmp_path, monkeypatch):
+    work = tmp_path / "config"
+    work.mkdir()
+    (work / "neon.toml").write_text('host = "cwd.example"\ndatabase = "other"\n')
+    monkeypatch.chdir(tmp_path)
+    assert cli._target_config_path() == Path(__file__).resolve().parents[1] / "config" / "neon.toml"
+
+
+def test_store_rejects_query_parameters_that_override_the_connection_target(tmp_path, monkeypatch):
+    config = tmp_path / "neon.toml"
+    config.write_text('host = "ep-example.example.neon.tech"\ndatabase = "ingestion_spike"\n')
+    monkeypatch.setattr(cli, "_target_config_path", lambda: config)
+    with pytest.raises(ValueError, match="outside the configured exercise database"):
+        cli._require_exercise_target(
+            "postgresql://ep-example.example.neon.tech/ingestion_spike?hostaddr=203.0.113.10"
+        )
