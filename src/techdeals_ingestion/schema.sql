@@ -171,7 +171,7 @@ SELECT DISTINCT ON (COALESCE(f.identity_key, f.entry_id), f.semantic_hash)
        f.*, COALESCE(c.equal_time_conflict, false) AS equal_time_conflict
 FROM fresh f
 LEFT JOIN conflicts c USING (identity_key, observed_at)
-WHERE f.identity_key IS NULL OR c.identity_key IS NOT NULL
+WHERE c.identity_key IS NOT NULL
 ORDER BY COALESCE(f.identity_key, f.entry_id), f.semantic_hash, f.entry_id;
 
 CREATE VIEW ingest_current_prices AS
