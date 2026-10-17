@@ -13,7 +13,10 @@ from urllib.parse import urlsplit
 
 
 def captured(command):
-    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Credential command timed out") from None
     if result.returncode:
         raise RuntimeError(f"Credential command failed with exit {result.returncode}")
     return result.stdout.strip()
