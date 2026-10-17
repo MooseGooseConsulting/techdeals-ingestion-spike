@@ -411,6 +411,13 @@ def test_price_numeric_original_requires_matching_amount():
     assert Price(original="Call for price", kind="ask", amount=None).amount is None
 
 
+def test_formatted_price_amount_must_match_original():
+    with pytest.raises(ValidationError):
+        Price(original="$500", kind="ask", amount="5000")
+    assert Price(original="$500", kind="ask", amount="500").amount == Decimal(500)
+    assert Price(original="$1,250.50", kind="ask", amount="1250.50").amount == Decimal("1250.50")
+
+
 @pytest.mark.asyncio
 async def test_price_consistency_error_uses_normal_sdk_correction(tmp_path):
     histories = []
@@ -603,6 +610,103 @@ async def test_price_citation_must_appear_in_the_cited_capture(tmp_path):
 
     assert len(histories) == 2
     assert result.entries[0].prices[0].original == "$500"
+
+    near = []
+
+    async def near_match(messages, info):
+        near.append(messages)
+        original = "$20" if len(near) == 1 else "$200"
+        amount = "20" if original == "$20" else "200"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "near",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": amount,
+                            "source_refs": [{"input_id": "capture-1"}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    near_result = await parse(
+        [source(content=b'{"ask":"$200"}')],
+        ParserSettings.load(),
+        tmp_path / "near",
+        model=FunctionModel(stream_function=near_match),
+    )
+    assert len(near) == 2
+    assert near_result.entries[0].prices[0].original == "$200"
+
+    misplaced = []
+
+    async def wrong_listing(messages, info):
+        misplaced.append(messages)
+        original = "$20" if len(misplaced) == 1 else "$10"
+        amount = "20" if original == "$20" else "10"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "listing A",
+                    "prices": [
+                        {
+                            "original": original,
+                            "kind": "ask",
+                            "amount": amount,
+                            "source_refs": [
+                                {"input_id": "capture-1", "locator": "json:/listing_a/ask"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    located = await parse(
+        [source(content=b'{"listing_a":{"ask":"$10"},"listing_b":{"ask":"$20"}}')],
+        ParserSettings.load(),
+        tmp_path / "located",
+        model=FunctionModel(stream_function=wrong_listing),
+    )
+    assert len(misplaced) == 2
+    assert located.entries[0].prices[0].original == "$10"
+
+
+@pytest.mark.asyncio
+async def test_json_unicode_price_text_is_decoded_before_citation_check(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        original = "$200" if len(histories) == 1 else "$20"
+        amount = "200" if original == "$200" else "20"
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "decoded",
+                    "prices": [{"original": original, "kind": "ask", "amount": amount}],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'{"ask":"\\u002420"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 2
+    assert result.entries[0].prices[0].original == "$20"
 
 
 def test_output_models_keep_prices_nested_and_fields_ordinary():
