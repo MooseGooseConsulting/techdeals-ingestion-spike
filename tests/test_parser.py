@@ -429,7 +429,7 @@ async def test_price_consistency_error_uses_normal_sdk_correction(tmp_path):
         )
 
     result = await parse(
-        [source()],
+        [source(content=b'{"name":"disk","ask":"14.99"}')],
         ParserSettings.load(),
         tmp_path,
         model=FunctionModel(stream_function=respond),
@@ -530,7 +530,7 @@ async def test_multi_input_price_requires_its_own_source_ref(tmp_path):
                             {"input_id": "capture-2"},
                         ],
                         "title": "bundle",
-                        "prices": [price | {"source_refs": [{"input_id": "capture-1"}]}],
+                        "prices": [price | {"source_refs": [{"input_id": "capture-2"}]}],
                     }
                 ],
             )
@@ -538,7 +538,7 @@ async def test_multi_input_price_requires_its_own_source_ref(tmp_path):
     result = await parse(
         [
             source(linked_group="listing"),
-            source("capture-2", b'{"name":"other"}', linked_group="listing"),
+            source("capture-2", b'{"name":"other","ask":"$20"}', linked_group="listing"),
         ],
         ParserSettings.load(),
         tmp_path,
@@ -546,7 +546,63 @@ async def test_multi_input_price_requires_its_own_source_ref(tmp_path):
     )
 
     assert len(histories) == 2
-    assert result.entries[0].prices[0].source_refs[0].input_id == "capture-1"
+    assert result.entries[0].prices[0].source_refs[0].input_id == "capture-2"
+
+
+@pytest.mark.asyncio
+async def test_price_citation_must_appear_in_the_cited_capture(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        shared = {
+            "source_refs": [{"input_id": "capture-1"}],
+            "title": "RTX 4070",
+        }
+        if len(histories) == 1:
+            yield output_call(
+                info,
+                [
+                    shared
+                    | {
+                        "prices": [
+                            {
+                                "original": "$20",
+                                "kind": "ask",
+                                "amount": "20",
+                                "source_refs": [{"input_id": "capture-1"}],
+                            }
+                        ]
+                    }
+                ],
+            )
+        else:
+            yield output_call(
+                info,
+                [
+                    shared
+                    | {
+                        "prices": [
+                            {
+                                "original": "$500",
+                                "kind": "ask",
+                                "amount": "500",
+                                "source_refs": [{"input_id": "capture-1"}],
+                            }
+                        ]
+                    }
+                ],
+            )
+
+    result = await parse(
+        [source()],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+
+    assert len(histories) == 2
+    assert result.entries[0].prices[0].original == "$500"
 
 
 def test_output_models_keep_prices_nested_and_fields_ordinary():
