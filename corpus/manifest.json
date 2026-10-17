@@ -171,7 +171,7 @@
       "sha256": "61419bfcd51ed98819eada0b476e82df90d6ff7d4bb8d70d9663f3e3fb4f5b94",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 1; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -191,7 +191,7 @@
       "sha256": "b2c6048385e8448ca41c3cb658db4c3ffbb2289bf603b8a221e97d1d9974f9c8",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 8; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -211,7 +211,7 @@
       "sha256": "d6be461a7f47eb14be27f14d57c844d1b0a3690486e3c4fb8bedb5612ef0542e",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 10; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -231,7 +231,7 @@
       "sha256": "0efcb97fabd0b300c51f5c77a66bc8258214f6498e8793979541e72a9ce155b9",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 16; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -251,7 +251,7 @@
       "sha256": "8a3a8ab24e890d04689453034d6b1b8cb3b7894977d8379ea7b45ed3813b4bea",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 6; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -271,7 +271,7 @@
       "sha256": "a12e85e2eb2843925ca6d98cb7ebab24a408c4505e89402077f4ac28e6fde5ea",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 14; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -291,7 +291,7 @@
       "sha256": "b9683814679621aeedeb3063ac525930a340ca489469745b8f057442ebba6a96",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 17; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
@@ -311,7 +311,7 @@
       "sha256": "53454b146342c9ee8bde084cdf0ec61b25b0df75e6ffc4cbd5f2df77e4fa413a",
       "provenance": {
         "classification": "parsed_raw_fragment",
-        "origin_path": "/home/coldaine/Downloads/fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
+        "origin_path": "fresh-512gb-server-discovery-2026-09-13.zip!raw_source/raw_variations.json",
         "source_commit": null,
         "selection_rule": "zero-based JSON array index 18; JSON reserialized, not original bytes",
         "parent_sha256": "2683948c318287c7f3b199f951e750e7e8eb94b699e4ce1340bffb2111779309"
