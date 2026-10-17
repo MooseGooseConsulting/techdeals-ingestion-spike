@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -25,9 +25,12 @@ class Source:
 _FORMATTED_PRICE = re.compile(
     r"""
     ^\s*
-    (?:(?P<prefix>[A-Z]{3}|[$])\s*)?
-    (?P<sign>-)?
-    (?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)
+    (?:(?P<prefix>[A-Z]{3}|[$€£¥])\s*)?
+    (?P<sign>[-+])?
+    (?P<number>
+        (?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][-+]?\d+)?
+        |\.\d+(?:[eE][-+]?\d+)?
+    )
     (?:\s*(?P<suffix>[A-Z]{3}))?
     \s*$
     """,
@@ -41,8 +44,11 @@ def _formatted_price_amount(original: str) -> Decimal | None:
     if match is None:
         return None
     number = match.group("number").replace(",", "")
-    sign = "-" if match.group("sign") else ""
-    amount = Decimal(f"{sign}{number}")
+    sign = match.group("sign") or ""
+    try:
+        amount = Decimal(f"{sign}{number}")
+    except InvalidOperation:
+        return None
     if not amount.is_finite():
         return None
     return amount
