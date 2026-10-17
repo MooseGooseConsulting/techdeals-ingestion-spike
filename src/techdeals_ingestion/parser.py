@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -184,9 +185,28 @@ def _capture_text(source: Source) -> str:
     return source.content.decode("utf-8", errors="replace")
 
 
+def _numeric_text(value: Any) -> str | None:
+    """Decimal text for a JSON number. Booleans are not prices."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        decimal = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    if not decimal.is_finite():
+        return None
+    text = format(decimal, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def _string_values(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
+    numeric = _numeric_text(value)
+    if numeric is not None:
+        return [numeric]
     if isinstance(value, dict):
         texts: list[str] = []
         for item in value.values():
@@ -247,13 +267,26 @@ def _locator_texts(source: Source, locator: str) -> list[str]:
             if type(exc).__name__ in {"SelectorSyntaxError", "NotImplementedError"}:
                 return []
             raise
-        return [node.get_text(" ", strip=False) for node in nodes]
+        return [text for node in nodes for text in _html_node_texts(node)]
     if locator.startswith("exact:"):
         text = locator[6:]
         if text and _complete_price_match(text, native):
             return [text]
         return []
     return []
+
+
+_PRICE_ATTRIBUTES = ("content", "value", "data-rate")
+
+
+def _html_node_texts(node: Any) -> list[str]:
+    """Text and price-bearing attributes of the selected node only."""
+    texts = [node.get_text(" ", strip=False)]
+    for name in _PRICE_ATTRIBUTES:
+        value = node.get(name)
+        if isinstance(value, str) and value:
+            texts.append(value)
+    return texts
 
 
 def _price_in_source(price: Price, source: Source, refs: list[SourceRef]) -> bool:
