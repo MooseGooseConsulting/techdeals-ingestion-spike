@@ -39,7 +39,9 @@ Copy source strings faithfully; do not paraphrase titles, descriptions, identifi
 qualifications.
 
 Return one entry per separately listed item, selectable configuration, or whole
-bundle/lot. A source can yield many entries. Keep every stated price nested on
+bundle/lot. A source can yield many entries. Omit optional fields whose value
+would be JSON null instead of emitting them; the schema accepts missing
+optionals. Keep every stated price nested on
 the entry it describes; a bundle's ask belongs to the bundle, not its contents.
 Emit a price object only when its original text states an amount of money.
 Counts, quantities, capacities, and model numbers are never prices; keep them
@@ -53,7 +55,10 @@ Preserve stock qualifications, condition, warranty, included items, and useful
 specifications. Do not infer available stock from a purchase quantity selector
 or infer quantities that are not stated. Keep source-native dates in source_dates
 from root-level and nested source objects, with their original field names and values and the source
-object each date describes. Use JSON null
+object each date describes. A date's original_field must be the exact key or
+label text from the capture, and value the exact date string: never rename a
+date field, so a bare timestamp is not "retrieved_at" unless the capture calls
+it that. Use JSON null
 when date meaning or scope is not established. Never turn retrieval time into a source date or
 invent an observation time.
 Leave unsupported values null, and report material ambiguity, conflict, or
