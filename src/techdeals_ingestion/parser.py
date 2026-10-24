@@ -39,10 +39,10 @@ Copy source strings faithfully; do not paraphrase titles, descriptions, identifi
 qualifications.
 
 Return one entry per separately listed item, selectable configuration, or whole
-bundle/lot. A source can yield many entries. Omit optional fields whose value
-would be JSON null instead of emitting them; the schema accepts missing
-optionals. Keep every stated price nested on
+bundle/lot. A source can yield many entries. Keep every stated price nested on
 the entry it describes; a bundle's ask belongs to the bundle, not its contents.
+Always populate amount and currency when the source states them: a plain
+numeric original requires its exact amount, never JSON null.
 Emit a price object only when its original text states an amount of money.
 Counts, quantities, capacities, and model numbers are never prices; keep them
 in attributes or description instead.
