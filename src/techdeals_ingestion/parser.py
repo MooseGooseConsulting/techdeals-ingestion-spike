@@ -41,6 +41,9 @@ qualifications.
 Return one entry per separately listed item, selectable configuration, or whole
 bundle/lot. A source can yield many entries. Keep every stated price nested on
 the entry it describes; a bundle's ask belongs to the bundle, not its contents.
+Emit a price object only when its original text states an amount of money.
+Counts, quantities, capacities, and model numbers are never prices; keep them
+in attributes or description instead.
 Preserve each price's original text, kind, stated basis, and conditions. Set currency to JSON null
 unless the source establishes it; a price symbol by itself may be ambiguous. When established,
 currency must be an uppercase three-letter ISO 4217 code. A vendor name is not the seller. Keep
