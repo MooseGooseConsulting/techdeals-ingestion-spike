@@ -1,0 +1,26 @@
+# Credentials are supplied by the process environment.
+base_url = "https://openrouter.ai/api/v1"
+# super-120b:free returned provider 404s from 2026-10-24 (route down on the
+# free tier); lightning:free answers. Revisit when the route recovers.
+model = "nvidia/nemotron-3.5-lightning:free"
+# Lightning ignores the reasoning cap and spends the whole output budget
+# thinking on multi-input prompts, so reasoning stays off for this model.
+# Re-enable only with a model whose cap is honored (see .runs/ingest-*).
+reasoning_enabled = false
+# Bounds the model's thinking so a long reasoning trace cannot consume the
+# whole output budget before the extraction call is emitted. Proven need:
+# lightning:free spent all 8192 output tokens reasoning on small-a and never
+# called the tool (see .runs/ingest-small-a-002).
+reasoning_max_tokens = 4000
+max_input_bytes = 524288
+# One model call must stay well under the free route's usable context.
+# Evidence: inputs batched at 64KB complete; an 86KB 9-input batch repeatedly
+# fails (provider error, then output truncation). Batches never split a
+# linked_group; an oversize single input still goes out alone and fails
+# honestly instead of silently.
+max_batch_bytes = 65536
+max_output_tokens = 8192
+# Free-tier calls on multi-input batches run long (batch-01 took 181-193s);
+# 90s killed them. 300s is the measured need, not generosity.
+timeout_seconds = 300
+correction_retries = 1
