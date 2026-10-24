@@ -83,8 +83,9 @@ def _prompt(sources: list[Source], secret: str | None) -> str:
         "Extract entries from these supplied captures. Input IDs are the only valid references."
     ]
     for source in sources:
+        # The acquisition key is a storage receipt and is never shown: it looks
+        # like an identifier and models cite it instead of the input_id.
         context = {
-            "acquisition_key": source.acquisition_key,
             "media_type": source.media_type,
             "namespace": source.namespace,
             "retrieved_at": source.retrieved_at.isoformat() if source.retrieved_at else None,
@@ -100,7 +101,7 @@ def _prompt(sources: list[Source], secret: str | None) -> str:
             rendered_context = rendered_context.replace(secret, "[REDACTED]")
         blocks.extend(
             [
-                f"\n===== INPUT {source.input_id} =====",
+                f"\n===== INPUT {source.input_id} (cite exactly this input_id) =====",
                 "COLLECTION CONTEXT (JSON):",
                 rendered_context,
                 f"NATIVE SOURCE CONTENT ({source.media_type}) BEGIN",
