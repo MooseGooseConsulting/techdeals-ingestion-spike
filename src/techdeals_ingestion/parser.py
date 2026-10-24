@@ -312,16 +312,26 @@ def _cited_texts(source: Source, refs: list[SourceRef]) -> list[str]:
 def _date_missing_captures(
     source_date: Any, sources: list[Source], refs: list[SourceRef]
 ) -> list[Source]:
-    """A native date's field and value must both occur in the cited region."""
+    """A native date's field and value must both occur in the cited region.
+
+    A locator already resolves the field: it selects the value region, so only
+    the value must occur there (the field name cannot appear inside its own
+    value). A bare citation covers the whole capture, where both the field
+    name and the value must occur.
+    """
     field = source_date.original_field.strip()
     value = source_date.value.strip()
     missing = []
     for source in sources:
         source_refs = [ref for ref in refs if ref.input_id == source.input_id]
         texts = _cited_texts(source, source_refs)
-        present = _complete_price_match(field, "\n".join(texts)) and _complete_price_match(
-            value, "\n".join(texts)
-        )
+        joined = "\n".join(texts)
+        if any(ref.locator for ref in source_refs):
+            present = _complete_price_match(value, joined)
+        else:
+            present = _complete_price_match(field, joined) and _complete_price_match(
+                value, joined
+            )
         if not present:
             missing.append(source)
     return missing

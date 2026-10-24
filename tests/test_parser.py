@@ -1013,6 +1013,41 @@ async def test_source_date_must_appear_in_the_cited_capture(tmp_path):
     assert result.entries[0].source_dates[0].value == "2026-01-02"
 
 
+@pytest.mark.asyncio
+async def test_locator_scoped_source_date_checks_value_not_field_name(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "dated",
+                    "source_dates": [
+                        {
+                            "original_field": "published_at",
+                            "value": "2026-09-24T07:49:45-04:00",
+                            "source_refs": [
+                                {"input_id": "capture-1", "locator": "json:/published_at"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'{"published_at":"2026-09-24T07:49:45-04:00"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 1
+    assert result.entries[0].source_dates[0].value == "2026-09-24T07:49:45-04:00"
+
+
 def test_output_models_keep_prices_nested_and_fields_ordinary():
     item = Entry(
         source_refs=[SourceRef(input_id="capture-1")],
