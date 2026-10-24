@@ -62,7 +62,13 @@ it that. Use JSON null
 when date meaning or scope is not established. Never turn retrieval time into a source date or
 invent an observation time.
 Leave unsupported values null, and report material ambiguity, conflict, or
-truncation in issues. Do not create database IDs, processing statuses, or
+truncation in issues. Native identifiers decide whether two sightings are the
+same offer: set native_id to the source's own identifier for the offered item
+(the variant, product, or listing id the capture itself uses). Variant_id and
+sku carry the commercial codes and may repeat that key. An entry with no
+source identifier stays identity-less and can never join a price history, so
+do not leave native_id null when the capture names the item. Do not create
+database IDs, processing statuses, or
 relationships between model-created IDs.
 
 Every input must be represented by at least one entry source_ref or a SourceIssue.
