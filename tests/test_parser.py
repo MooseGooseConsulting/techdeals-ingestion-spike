@@ -407,8 +407,7 @@ def test_currency_sentinel_and_malformed_codes_are_rejected(currency):
 
 
 def test_price_numeric_original_requires_matching_amount():
-    with pytest.raises(ValidationError):
-        Price(original="14.99", kind="ask", amount=None)
+    assert Price(original="14.99", kind="ask", amount=None).amount == Decimal("14.99")
     with pytest.raises(ValidationError):
         Price(original="14.99", kind="ask", amount="15.00")
 
@@ -422,8 +421,7 @@ def test_formatted_price_amount_must_match_original():
     assert Price(original="$500", kind="ask", amount="500").amount == Decimal(500)
     assert Price(original="$1,250.50", kind="ask", amount="1250.50").amount == Decimal("1250.50")
     for original, amount in (("1e3", "1000"), ("+14.99", "14.99"), (".99", "0.99")):
-        with pytest.raises(ValidationError):
-            Price(original=original, kind="ask", amount=None)
+        assert Price(original=original, kind="ask", amount=None).amount == Decimal(amount)
         with pytest.raises(ValidationError):
             Price(original=original, kind="ask", amount="10")
         assert Price(original=original, kind="ask", amount=amount).amount == Decimal(amount)
@@ -448,7 +446,7 @@ async def test_price_consistency_error_uses_normal_sdk_correction(tmp_path):
 
     async def respond(messages, info):
         histories.append(messages)
-        amount = None if len(histories) == 1 else "14.99"
+        amount = "15.00" if len(histories) == 1 else "14.99"
         yield output_call(
             info,
             [
@@ -1099,3 +1097,37 @@ def test_plan_batches_sends_an_oversize_single_input_alone():
     small = source("small", b"s" * 10)
     batches = plan_batches([big, small], 100)
     assert [[s.input_id for s in batch] for batch in batches] == [["big"], ["small"]]
+
+
+def test_unambiguous_original_fills_a_missing_amount():
+    assert Price(original="$280", kind="ask").amount == Decimal(280)
+    assert Price(original="$20-$30", kind="ask").amount is None
+    with pytest.raises(ValidationError):
+        Price(original="$280", kind="ask", amount="281")
+
+
+@pytest.mark.asyncio
+async def test_null_amount_with_single_plain_original_is_filled_not_retried(tmp_path):
+    histories = []
+
+    async def respond(messages, info):
+        histories.append(messages)
+        yield output_call(
+            info,
+            [
+                {
+                    "source_refs": [{"input_id": "capture-1"}],
+                    "title": "Disk",
+                    "prices": [{"original": "$280", "kind": "ask"}],
+                }
+            ],
+        )
+
+    result = await parse(
+        [source(content=b'{"item":"Disk","ask":"$280"}')],
+        ParserSettings.load(),
+        tmp_path,
+        model=FunctionModel(stream_function=respond),
+    )
+    assert len(histories) == 1
+    assert result.entries[0].prices[0].amount == Decimal(280)

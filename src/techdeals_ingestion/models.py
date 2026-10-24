@@ -101,6 +101,25 @@ class Price(Output):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def fill_unambiguous_amount(cls, data: Any) -> Any:
+        """Fill a missing amount when the original text holds precisely one.
+
+        Deterministic normalization, not model judgment: parsing "$280" to
+        280 adds no information beyond the already-copied original text.
+        Ambiguous text (ranges, several amounts) keeps amount null, and the
+        source-evidence checks afterward still reject anything the capture
+        does not support (counts, model numbers, grams).
+        """
+        if isinstance(data, dict) and data.get("amount") is None:
+            original = data.get("original")
+            if isinstance(original, str):
+                amounts = list(dict.fromkeys(_formatted_price_amounts(original)))
+                if len(amounts) == 1:
+                    return {**data, "amount": amounts[0]}
+        return data
+
     @model_validator(mode="after")
     def amount_matches_plain_numeric_original(self) -> "Price":
         amounts = list(dict.fromkeys(_formatted_price_amounts(self.original)))
