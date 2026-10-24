@@ -661,7 +661,17 @@ async def parse(
             accepted = valid_entries
             problems = _validate_output(output, readable_sources)
             if problems:
-                raise ModelRetry("Correct the extraction: " + "; ".join(problems))
+                retry = "Correct the extraction: " + "; ".join(problems)
+                if valid_entries:
+                    kept = [
+                        entry.model_dump(mode="json", exclude_none=True)
+                        for entry in valid_entries
+                    ]
+                    retry += (
+                        " Keep these already-valid entries unchanged in the "
+                        "corrected output: " + json.dumps(kept)
+                    )
+                raise ModelRetry(retry)
             return output
 
         prompt = _prompt(readable_sources, secret)
