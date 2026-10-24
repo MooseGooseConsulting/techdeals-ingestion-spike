@@ -15,6 +15,7 @@ class ParserSettings(BaseModel):
     reasoning_enabled: bool = True
     reasoning_max_tokens: int = Field(gt=0)
     max_input_bytes: int = Field(gt=0)
+    max_batch_bytes: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     timeout_seconds: int = Field(gt=0)
     correction_retries: int = Field(ge=0, le=1)

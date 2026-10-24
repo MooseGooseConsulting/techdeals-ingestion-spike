@@ -34,6 +34,8 @@ async def test_ingest_retains_then_parses_once_and_writes_attempt_snapshots(tmp_
     events = []
 
     class Settings:
+        max_batch_bytes = 150000
+
         def model_dump(self, **kwargs):
             return {"model": "test-model"}
 
@@ -94,6 +96,8 @@ async def test_zero_entries_without_a_source_issue_is_incomplete(tmp_path, monke
     output = tmp_path / "run"
 
     class Settings:
+        max_batch_bytes = 150000
+
         def model_dump(self, **kwargs):
             return {}
 
@@ -130,6 +134,8 @@ async def test_provider_exception_text_is_never_saved_or_reported(tmp_path, monk
     persisted_errors = []
 
     class Settings:
+        max_batch_bytes = 150000
+
         def model_dump(self, **kwargs):
             return {}
 
@@ -173,6 +179,8 @@ async def test_validation_failure_keeps_a_sanitized_message(tmp_path, monkeypatc
     output = tmp_path / "run"
 
     class Settings:
+        max_batch_bytes = 150000
+
         def model_dump(self, **kwargs):
             return {}
 
@@ -212,6 +220,8 @@ async def test_snapshot_failure_preserves_the_saved_extraction(tmp_path, monkeyp
     saves = []
 
     class Settings:
+        max_batch_bytes = 150000
+
         def model_dump(self, **kwargs):
             return {}
 

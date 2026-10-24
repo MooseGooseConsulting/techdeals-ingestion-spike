@@ -135,45 +135,85 @@ async def _ingest(args) -> int:
         "status": "failed",
         "reused": False,
     }
-    result: Extraction | None = None
+    result = Extraction()
+    combined = Extraction()
+    batch_reports: list[dict[str, Any]] = []
+    saved_attempts: list[str] = []
     try:
         # Raw retention is committed before checksum checks, cache lookup or inference.
         for source in sources:
             declared = package.declared_hashes.get(source.input_id)
             if declared and hashlib.sha256(source.content).hexdigest() != declared:
                 raise ValueError(f"Declared capture checksum mismatch: {source.input_id}")
-        cached = None if args.fresh else store.cached(sources, parser_key)
-        if cached is not None:
-            result, origin_attempt = cached
-            report["reused"] = True
-        else:
-            result = await parser.parse(sources, settings, trace_dir)
-            origin_attempt = None
-        covered = {ref.input_id for entry in result.entries for ref in entry.source_refs}
-        reported = {issue.input_id for issue in result.issues}
-        result.issues.extend(
-            SourceIssue(
-                input_id=source.input_id,
-                message="No entry or source issue was returned for this input.",
-            )
-            for source in sources
-            if source.input_id not in covered and source.input_id not in reported
-        )
-        saved = store.save(sources, result, parser_key, reuse_of=origin_attempt)
-        report.update(saved)
-        issues = [issue.model_dump(mode="json") for issue in result.issues]
+        batches = parser.plan_batches(sources, settings.max_batch_bytes)
+        for position, batch in enumerate(batches):
+            batch_trace = trace_dir / f"batch-{position:02d}"
+            batch_trace.mkdir(exist_ok=True)
+            batch_report: dict[str, Any] = {"inputs": [s.input_id for s in batch]}
+            try:
+                cached = None if args.fresh else store.cached(batch, parser_key)
+                if cached is not None:
+                    batch_result, origin_attempt = cached
+                    batch_report["reused"] = True
+                else:
+                    batch_result = await parser.parse(batch, settings, batch_trace)
+                    origin_attempt = None
+                    batch_report["reused"] = False
+                covered = {
+                    ref.input_id for entry in batch_result.entries for ref in entry.source_refs
+                }
+                reported = {issue.input_id for issue in batch_result.issues}
+                batch_result.issues.extend(
+                    SourceIssue(
+                        input_id=source.input_id,
+                        message="No entry or source issue was returned for this input.",
+                    )
+                    for source in batch
+                    if source.input_id not in covered and source.input_id not in reported
+                )
+                saved = store.save(batch, batch_result, parser_key, reuse_of=origin_attempt)
+                batch_report["attempt_id"] = saved["attempt_id"]
+                batch_report["entries"] = len(batch_result.entries)
+                saved_attempts.append(saved["attempt_id"])
+                combined.entries.extend(batch_result.entries)
+                combined.issues.extend(batch_result.issues)
+            except Exception as exc:  # noqa: BLE001 - one bad batch must not hide the others
+                error = {"type": type(exc).__name__}
+                if isinstance(exc, ValueError):
+                    error["message"] = _safe_error(str(exc))
+                status_code = getattr(exc, "status_code", None)
+                if isinstance(status_code, int):
+                    error["status_code"] = status_code
+                batch_report["error"] = error
+                saved = store.save(batch, None, parser_key, error=json.dumps(error, sort_keys=True))
+                batch_report["attempt_id"] = saved["attempt_id"]
+                saved_attempts.append(saved["attempt_id"])
+            batch_reports.append(batch_report)
+        report["batches"] = batch_reports
+        report["attempt_ids"] = saved_attempts
+        if saved_attempts:
+            # Single-batch runs keep the historical top-level key.
+            report["attempt_id"] = saved_attempts[0]
+        report["reused"] = bool(batch_reports) and all(b.get("reused") for b in batch_reports)
+        if len(batch_reports) == 1 and "error" in batch_reports[0]:
+            report["error"] = batch_reports[0]["error"]
+        issues = [issue.model_dump(mode="json") for issue in combined.issues]
         issues.extend(
             {"input_id": ref.input_id, "message": message}
-            for entry in result.entries
+            for entry in combined.entries
             for message in entry.issues
             for ref in entry.source_refs[:1]
         )
         report["issues"] = issues
+        report["saved_entries"] = len(combined.entries)
         report["status"] = (
-            "completed_with_issues"
-            if issues or (not result.entries and not result.issues)
+            "failed"
+            if any("error" in b for b in batch_reports)
+            else "completed_with_issues"
+            if issues or not combined.entries
             else "completed"
         )
+        result = combined
         (destination / "result.json").write_text(_json(result), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001 - preserve failed attempts for provider and output errors
         error = {"type": type(exc).__name__}
@@ -189,8 +229,13 @@ async def _ingest(args) -> int:
         result = None
     else:
         try:
-            entries = _snapshot(store, "entries", saved["attempt_id"])
-            prices = _snapshot(store, "prices", saved["attempt_id"])
+            entries: list[dict[str, Any]] = []
+            prices: list[dict[str, Any]] = []
+            for batch_report in batch_reports:
+                if "error" in batch_report:
+                    continue
+                entries.extend(_snapshot(store, "entries", batch_report["attempt_id"]))
+                prices.extend(_snapshot(store, "prices", batch_report["attempt_id"]))
             (destination / "database-entries.json").write_text(_json(entries), encoding="utf-8")
             (destination / "database-prices.json").write_text(_json(prices), encoding="utf-8")
             report["database_entries"] = len(entries)

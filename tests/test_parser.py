@@ -16,7 +16,7 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from techdeals_ingestion.models import Entry, Price, Source, SourceDate, SourceRef
-from techdeals_ingestion.parser import _request_hook, parse
+from techdeals_ingestion.parser import _request_hook, parse, plan_batches
 from techdeals_ingestion.settings import ParserSettings, fingerprint
 
 
@@ -472,7 +472,7 @@ async def test_price_consistency_error_uses_normal_sdk_correction(tmp_path):
 
 def test_settings_are_small_strict_and_fingerprint_stable(tmp_path):
     settings = ParserSettings.load()
-    assert len(ParserSettings.model_fields) == 8
+    assert len(ParserSettings.model_fields) == 9
     assert fingerprint(settings) == fingerprint(ParserSettings.load())
     source_text = Path("config/parser.toml").read_text()
     for invalid in [
@@ -1021,3 +1021,34 @@ def test_output_models_keep_prices_nested_and_fields_ordinary():
     )
     assert item.prices[0].amount == Decimal(20)
     assert item.source_dates[0].original_field == "published"
+
+
+def test_plan_batches_respects_budget_and_preserves_order():
+    a = source("a", b"x" * 60)
+    b = source("b", b"y" * 60)
+    c = source("c", b"z" * 60)
+    batches = plan_batches([a, b, c], 100)
+    assert [[s.input_id for s in batch] for batch in batches] == [["a"], ["b"], ["c"]]
+
+
+def test_plan_batches_never_splits_a_linked_group():
+    solo = source("solo", b"s" * 10)
+    first = source("g1", b"g" * 60, linked_group="g")
+    second = source("g2", b"g" * 60, linked_group="g")
+    batches = plan_batches([solo, first, second], 100)
+    assert [[s.input_id for s in batch] for batch in batches] == [["solo"], ["g1", "g2"]]
+
+
+def test_plan_batches_collects_nonadjacent_linked_members():
+    first = source("g1", b"g" * 10, linked_group="g")
+    middle = source("solo", b"s" * 10)
+    second = source("g2", b"g" * 10, linked_group="g")
+    batches = plan_batches([first, middle, second], 1000)
+    assert [[s.input_id for s in batch] for batch in batches] == [["g1", "g2", "solo"]]
+
+
+def test_plan_batches_sends_an_oversize_single_input_alone():
+    big = source("big", b"b" * 200)
+    small = source("small", b"s" * 10)
+    batches = plan_batches([big, small], 100)
+    assert [[s.input_id for s in batch] for batch in batches] == [["big"], ["small"]]

@@ -554,6 +554,45 @@ def _append_event(
         output.flush()
 
 
+def plan_batches(sources: list[Source], budget: int) -> list[list[Source]]:
+    """Split sources into model calls that fit the free route's usable context.
+
+    Order-preserving and deterministic so retries hit the same receipt keys.
+    A linked_group is never split across batches: the parser validates links
+    within one call. A single input over budget still goes out alone and fails
+    honestly instead of silently.
+    """
+    batches: list[list[Source]] = []
+    current: list[Source] = []
+    current_bytes = 0
+    # Collect atomic units first: one source, or a whole linked_group in
+    # first-appearance order even when its members are not adjacent.
+    units: list[list[Source]] = []
+    emitted: set[str] = set()
+    by_group: dict[str, list[Source]] = {}
+    for source in sources:
+        if source.linked_group:
+            by_group.setdefault(source.linked_group, []).append(source)
+    for source in sources:
+        group = source.linked_group
+        if not group:
+            units.append([source])
+        elif group not in emitted:
+            emitted.add(group)
+            units.append(list(by_group[group]))
+    for unit in units:
+        unit_bytes = sum(len(source.content) for source in unit)
+        if current and current_bytes + unit_bytes > budget:
+            batches.append(current)
+            current = []
+            current_bytes = 0
+        current.extend(unit)
+        current_bytes += unit_bytes
+    if current:
+        batches.append(current)
+    return batches
+
+
 async def parse(
     sources: list[Source],
     settings: ParserSettings,

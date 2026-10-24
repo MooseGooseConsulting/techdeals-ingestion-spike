@@ -8,6 +8,11 @@ reasoning_enabled = true
 # called the tool (see .runs/ingest-small-a-002).
 reasoning_max_tokens = 4000
 max_input_bytes = 524288
+# One model call must stay well under the free route's usable context.
+# Evidence: a 143KB single input completes; a 229KB 10-input batch fails at
+# the provider. Batches never split a linked_group; an oversize single input
+# still goes out alone and fails honestly instead of silently.
+max_batch_bytes = 150000
 max_output_tokens = 8192
 timeout_seconds = 90
 correction_retries = 1
