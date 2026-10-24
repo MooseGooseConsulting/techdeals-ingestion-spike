@@ -67,7 +67,10 @@ relationships between model-created IDs.
 
 Every input must be represented by at least one entry source_ref or a SourceIssue.
 Use only supplied input_id values. A source_ref locator is optional; null means
-the whole capture supports the entry. If a locator is useful, use json:/ followed
+the whole capture supports the entry. A locator must point at the exact field
+that holds the value (json:/published_at, never the document root json:/ or a
+parent object); a vague locator adds nothing over a bare input_id. If a locator
+is useful, use json:/ followed
 by a JSON Pointer, html: followed by a CSS selector, or exact: followed by text
 that appears verbatim in the input. Do not invent locators.
 """
