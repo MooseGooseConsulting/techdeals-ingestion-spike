@@ -214,8 +214,24 @@ def _string_values(value: Any) -> list[str]:
     return []
 
 
+def _leading_digit_run(text: str) -> str:
+    run = []
+    for char in text:
+        if not char.isdigit():
+            break
+        run.append(char)
+    return "".join(run)
+
+
 def _complete_price_match(original: str, text: str) -> bool:
-    """Accept the whole price, not a prefix of a longer amount such as $20 inside $200."""
+    """Accept the whole price, not a prefix of a longer amount such as $20 inside $200.
+
+    Commas are group separators only where thousands notation allows them: a
+    comma before the match joins a longer number only when the match opens
+    with exactly three digits ("1,250" but not "33,2026"), and a comma after
+    the match continues a number only when the match has no decimal fraction
+    ("$1,250" but not "39.99,1.0" in delimited text).
+    """
     if not original:
         return False
     start = 0
@@ -227,10 +243,20 @@ def _complete_price_match(original: str, text: str) -> bool:
         before = text[index - 1] if index else ""
         after = text[end] if end < len(text) else ""
         preceded = original[0].isdigit() and (
-            before.isdigit() or (before in {".", ","} and index >= 2 and text[index - 2].isdigit())
+            before.isdigit()
+            or (before == "." and index >= 2 and text[index - 2].isdigit())
+            or (
+                before == ","
+                and index >= 2
+                and text[index - 2].isdigit()
+                and ("," in original or len(_leading_digit_run(original)) == 3)
+            )
         )
         continues = after.isdigit() or (
-            after in {".", ","} and end + 1 < len(text) and text[end + 1].isdigit()
+            after in {".", ","}
+            and end + 1 < len(text)
+            and text[end + 1].isdigit()
+            and (after == "." or "." not in original)
         )
         if not preceded and not continues:
             return True

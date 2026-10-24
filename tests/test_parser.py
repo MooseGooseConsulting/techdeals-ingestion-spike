@@ -16,7 +16,7 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from techdeals_ingestion.models import Entry, Price, Source, SourceDate, SourceRef
-from techdeals_ingestion.parser import _request_hook, parse, plan_batches
+from techdeals_ingestion.parser import _complete_price_match, _request_hook, parse, plan_batches
 from techdeals_ingestion.settings import ParserSettings, fingerprint
 
 
@@ -438,6 +438,18 @@ def test_formatted_price_amount_must_match_original():
     with pytest.raises(ValidationError, match="not checkable"):
         Price(original="$10 or $20", kind="ask", amount="10")
     assert Price(original="$10 or $20", kind="ask", amount=None).amount is None
+
+
+def test_complete_price_match_handles_delimited_text():
+    assert not _complete_price_match("$20", "price: $200")
+    assert not _complete_price_match("250", "count: 1,250 items")
+    assert not _complete_price_match("20", "price: $200")
+    assert not _complete_price_match("39", "value: 39.99")
+    assert _complete_price_match("39.99", "value: 39.99,1.0")
+    assert _complete_price_match("1,250.50", "total: 21,250.50 paid") is False
+    assert _complete_price_match("250", "total: 1,250 paid") is False
+    assert _complete_price_match("2026", "row: 33,2026 refreshed")
+    assert _complete_price_match("2026-07-31T10:05:33.729223+00:00", "log,2026-07-31T10:05:33.729223+00:00,eBay")
 
 
 @pytest.mark.asyncio
