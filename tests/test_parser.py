@@ -449,7 +449,9 @@ def test_complete_price_match_handles_delimited_text():
     assert _complete_price_match("1,250.50", "total: 21,250.50 paid") is False
     assert _complete_price_match("250", "total: 1,250 paid") is False
     assert _complete_price_match("2026", "row: 33,2026 refreshed")
-    assert _complete_price_match("2026-07-31T10:05:33.729223+00:00", "log,2026-07-31T10:05:33.729223+00:00,eBay")
+    assert _complete_price_match(
+        "2026-07-31T10:05:33.729223+00:00", "log,2026-07-31T10:05:33.729223+00:00,eBay"
+    )
 
 
 @pytest.mark.asyncio

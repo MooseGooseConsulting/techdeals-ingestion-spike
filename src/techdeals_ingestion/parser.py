@@ -370,9 +370,7 @@ def _date_missing_captures(
         if any(ref.locator for ref in source_refs):
             present = _complete_price_match(value, joined)
         else:
-            present = _complete_price_match(field, joined) and _complete_price_match(
-                value, joined
-            )
+            present = _complete_price_match(field, joined) and _complete_price_match(value, joined)
         if not present:
             missing.append(source)
     return missing
@@ -765,8 +763,7 @@ async def parse(
                 retry = "Correct the extraction: " + "; ".join(problems)
                 if valid_entries:
                     kept = [
-                        entry.model_dump(mode="json", exclude_none=True)
-                        for entry in valid_entries
+                        entry.model_dump(mode="json", exclude_none=True) for entry in valid_entries
                     ]
                     retry += (
                         " Keep these already-valid entries unchanged in the "
