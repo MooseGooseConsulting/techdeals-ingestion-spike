@@ -307,7 +307,11 @@ async def test_openrouter_sdk_request_settings_and_trace_redact_secret(tmp_path,
     body = json.loads(requests[0].content)
     assert body["model"] == settings.model
     assert body["max_tokens"] == settings.max_output_tokens
-    assert body["reasoning"] == {"enabled": True, "max_tokens": settings.reasoning_max_tokens}
+    assert body["reasoning"] == (
+        {"enabled": True, "max_tokens": settings.reasoning_max_tokens}
+        if settings.reasoning_enabled
+        else {"enabled": False}
+    )
     request_trace = json.loads((tmp_path / "request-001.json").read_text())
     assert request_trace["body"]["response_format"]["type"] == "json_schema"
     request_messages = request_trace["body"]["messages"]
