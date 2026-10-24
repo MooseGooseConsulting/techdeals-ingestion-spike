@@ -25,13 +25,14 @@ def source(
     content=b'{"name":"RTX 4070","ask":"$500"}',
     *,
     linked_group=None,
+    namespace="marketplace",
 ):
     return Source(
         input_id=input_id,
         acquisition_key=f"capture:{input_id}",
         content=content,
         media_type="application/json",
-        namespace="marketplace",
+        namespace=namespace,
         retrieved_at=datetime(2026, 10, 16, tzinfo=UTC),
         url="https://example.test/listing/1",
         linked_group=linked_group,
@@ -1083,7 +1084,14 @@ def test_plan_batches_collects_nonadjacent_linked_members():
     middle = source("solo", b"s" * 10)
     second = source("g2", b"g" * 10, linked_group="g")
     batches = plan_batches([first, middle, second], 1000)
-    assert [[s.input_id for s in batch] for batch in batches] == [["g1", "g2", "solo"]]
+    assert [[s.input_id for s in batch] for batch in batches] == [["g1", "g2"], ["solo"]]
+
+
+def test_plan_batches_keeps_unrelated_namespaces_apart():
+    a = source("a", b"x" * 10)
+    b = source("b", b"y" * 10, namespace="other")
+    batches = plan_batches([a, b], 1000)
+    assert [[s.input_id for s in batch] for batch in batches] == [["a"], ["b"]]
 
 
 def test_plan_batches_sends_an_oversize_single_input_alone():

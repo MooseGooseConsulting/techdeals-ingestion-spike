@@ -570,16 +570,20 @@ def _append_event(
 
 
 def plan_batches(sources: list[Source], budget: int) -> list[list[Source]]:
-    """Split sources into model calls that fit the free route's usable context.
+    """Split sources into model calls the free route can actually complete.
 
+    Proven need: the model fills amounts correctly one catalog at a time
+    (spd alone: 6 entries, 6 prices) but drops them when unrelated namespaces
+    share a prompt (spd+hls+gov: amounts missing). So a batch holds one
+    atomic unit — a single input or a whole linked_group — plus only
+    consecutive units from the same namespace and group, within budget.
     Order-preserving and deterministic so retries hit the same receipt keys.
-    A linked_group is never split across batches: the parser validates links
-    within one call. A single input over budget still goes out alone and fails
-    honestly instead of silently.
+    An oversize single unit still goes out alone and fails honestly.
     """
     batches: list[list[Source]] = []
     current: list[Source] = []
     current_bytes = 0
+    current_key: tuple[str | None, str | None] | None = None
     # Collect atomic units first: one source, or a whole linked_group in
     # first-appearance order even when its members are not adjacent.
     units: list[list[Source]] = []
@@ -596,11 +600,15 @@ def plan_batches(sources: list[Source], budget: int) -> list[list[Source]]:
             emitted.add(group)
             units.append(list(by_group[group]))
     for unit in units:
+        key = (unit[0].namespace, unit[0].linked_group)
         unit_bytes = sum(len(source.content) for source in unit)
-        if current and current_bytes + unit_bytes > budget:
+        if current and (key != current_key or current_bytes + unit_bytes > budget):
             batches.append(current)
             current = []
             current_bytes = 0
+            current_key = None
+        if not current:
+            current_key = key
         current.extend(unit)
         current_bytes += unit_bytes
     if current:
