@@ -1,0 +1,4 @@
+# Corpus captures are evidence: their bytes are hashed (see
+# corpus/manifest.json and tests/test_corpus.py), so Git must never rewrite
+# line endings in them on any platform.
+corpus/** -text
