@@ -35,7 +35,7 @@ async def main():
     source = Path("corpus/native/small-a/small-spd.json").read_text()
     agent = Agent(
         OpenRouterModel(
-            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3.5-lightning:free",
             profile={"supports_json_schema_output": True},
         ),
         output_type=NativeOutput(Product, template="Extract into this JSON schema:\n{schema}"),
@@ -56,7 +56,7 @@ async def main():
             async with asyncio.timeout(60):
                 result = await agent.run(source)
             rendered = result.output.model_dump_json(indent=2)
-            (destination / "result.json").write_text(rendered + "\n")
+            (destination / "result.json").write_text(rendered + "\n", encoding="utf-8")
             print(rendered)
             print(result.usage)
         except (AgentRunError, APIConnectionError, TimeoutError) as exc:
@@ -67,7 +67,7 @@ async def main():
             secret = os.environ.get("OPENROUTER_API_KEY")
             if secret:
                 trace = trace.replace(secret, "[REDACTED]")
-            (destination / "messages.json").write_text(trace)
+            (destination / "messages.json").write_text(trace, encoding="utf-8")
             print(f"Run artifacts: {destination}")
 
 

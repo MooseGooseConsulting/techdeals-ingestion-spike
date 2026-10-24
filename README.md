@@ -22,7 +22,7 @@ framework have been removed. The corpus and its provenance stay.
 
 The stack is Python 3.12, PydanticAI, Pydantic, psycopg, PostgreSQL, uv, pytest
 and Ruff. Beautiful Soup checks optional HTML locators. The committed model is
-`nvidia/nemotron-3-super-120b-a12b:free` through OpenRouter, with reasoning enabled,
+`nvidia/nemotron-3.5-lightning:free` through OpenRouter, with reasoning enabled,
 native JSON-schema output, at most one correction, and no alternative-model fallback. Model selection is
 in `config/parser.toml`. Credentials enter through Doppler-injected process
 environment; the application does not load `.env` files.
@@ -94,7 +94,7 @@ these keys do not prove arbitrary source identity semantics.
 
 `scripts/extract_example.py` calls PydanticAI directly on one complete native
 product, extracting title, SKU, price, currency and publication date. It uses the
-free `nvidia/nemotron-3-super-120b-a12b:free` route with reasoning enabled,
+free `nvidia/nemotron-3.5-lightning:free` route with reasoning enabled,
 independently of the full parser configuration:
 
 ```bash

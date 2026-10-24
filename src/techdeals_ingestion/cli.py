@@ -174,7 +174,7 @@ async def _ingest(args) -> int:
             if issues or (not result.entries and not result.issues)
             else "completed"
         )
-        (destination / "result.json").write_text(_json(result))
+        (destination / "result.json").write_text(_json(result), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001 - preserve failed attempts for provider and output errors
         error = {"type": type(exc).__name__}
         if isinstance(exc, ValueError):
@@ -191,15 +191,15 @@ async def _ingest(args) -> int:
         try:
             entries = _snapshot(store, "entries", saved["attempt_id"])
             prices = _snapshot(store, "prices", saved["attempt_id"])
-            (destination / "database-entries.json").write_text(_json(entries))
-            (destination / "database-prices.json").write_text(_json(prices))
+            (destination / "database-entries.json").write_text(_json(entries), encoding="utf-8")
+            (destination / "database-prices.json").write_text(_json(prices), encoding="utf-8")
             report["database_entries"] = len(entries)
             report["database_prices"] = len(prices)
         except Exception as exc:  # noqa: BLE001 - snapshot failure must not replace a saved extraction
             report["snapshot_error"] = {"type": type(exc).__name__}
     if result is None:
-        (destination / "result.json").write_text(_json({"status": "failed"}))
-    (destination / "report.json").write_text(_json(report))
+        (destination / "result.json").write_text(_json({"status": "failed"}), encoding="utf-8")
+    (destination / "report.json").write_text(_json(report), encoding="utf-8")
     print(_json(report), end="")
     if report["status"] != "completed" or report.get("snapshot_error"):
         return 1

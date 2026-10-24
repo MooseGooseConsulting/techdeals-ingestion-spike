@@ -466,7 +466,7 @@ def _write_trace(trace_dir: str | Path | None, record: dict[str, Any], secret: s
     rendered = json.dumps(record, ensure_ascii=False, indent=2, default=str)
     if secret:
         rendered = rendered.replace(secret, "[REDACTED]")
-    (path / "run-001.json").write_text(rendered + "\n")
+    (path / "run-001.json").write_text(rendered + "\n", encoding="utf-8")
 
 
 def _request_hook(trace_dir: str | Path | None, started: float, secret: str | None):
@@ -496,7 +496,7 @@ def _request_hook(trace_dir: str | Path | None, started: float, secret: str | No
         rendered = json.dumps(record, ensure_ascii=False, indent=2, default=str)
         if secret:
             rendered = rendered.replace(secret, "[REDACTED]")
-        (path / f"request-{request_number:03d}.json").write_text(rendered + "\n")
+        (path / f"request-{request_number:03d}.json").write_text(rendered + "\n", encoding="utf-8")
 
     return capture
 
@@ -646,7 +646,11 @@ async def parse(
                 "timeout": request_timeout
                 if active_client is not None
                 else settings.timeout_seconds,
-                "openrouter_reasoning": {"enabled": settings.reasoning_enabled},
+                "openrouter_reasoning": (
+                    {"enabled": True, "max_tokens": settings.reasoning_max_tokens}
+                    if settings.reasoning_enabled
+                    else {"enabled": False}
+                ),
             },
         )
 

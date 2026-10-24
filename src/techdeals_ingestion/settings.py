@@ -13,6 +13,7 @@ class ParserSettings(BaseModel):
     base_url: str
     model: str
     reasoning_enabled: bool = True
+    reasoning_max_tokens: int = Field(gt=0)
     max_input_bytes: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     timeout_seconds: int = Field(gt=0)
