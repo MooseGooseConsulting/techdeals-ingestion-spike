@@ -174,13 +174,13 @@ and history.
 Earlier TechDeals work proposed these. They are recorded here so they are not
 reopened by a later agent reading the reference repositories. Where a rejection
 supersedes an owner's earlier verbatim request, the later, narrower instruction
-governs. See [idea-triage.md](idea-triage.md) for the full disposition list.
+governs.
 
 - **Cost apportionment / dividing a lot price across components.** An earlier
   brief asked that a multi-item posting's total be apportioned. Later design work
-  prohibits inventing unit prices: retain the stated amount and its scope, and
-  leave a component's price explicitly ambiguous (`bound`) when the source does
-  not state it (P3). Do not build a division feature.
+  prohibits inventing unit prices: retain the stated amount on the posting or
+  group the source attaches it to, and record no price for a component the
+  source does not price (P3). Do not build a division feature.
 - **A fixed product taxonomy as the schema.** The twelve-category projection set
   and legacy identity graph are production reference, not this project's DDL.
   Categories develop with the information (P7); adding one is inserting data.
