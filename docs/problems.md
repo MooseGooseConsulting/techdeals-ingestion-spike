@@ -168,3 +168,44 @@ Broad legacy migration waits until the new path works. Development
 must protect the existing cluster and production data. Production incorporation
 follows demonstration of useful behavior and review of the affected consumers
 and history.
+
+## Directions already rejected
+
+Earlier TechDeals work proposed these. They are recorded here so they are not
+reopened by a later agent reading the reference repositories. Where a rejection
+supersedes an owner's earlier verbatim request, the later, narrower instruction
+governs.
+
+- **Cost apportionment / dividing a lot price across components.** An earlier
+  brief asked that a multi-item posting's total be apportioned. Later design work
+  prohibits inventing unit prices: retain the stated amount on the posting or
+  group the source attaches it to, and record no price for a component the
+  source does not price (P3). Do not build a division feature.
+- **A fixed product taxonomy as the schema.** The twelve-category projection set
+  and legacy identity graph are production reference, not this project's DDL.
+  Categories develop with the information (P7); adding one is inserting data.
+- **Scraper-first or collector-per-source implementation.** Collection is not the
+  bottleneck. Prove the shared parser and storage from existing captures first;
+  add a source-specific route only for a demonstrated gap (P1).
+- **Model-generated identity or an arbitrary confidence score.** Listing identity,
+  deduplication, dates, and merges use ordinary code and source/native keys; a
+  model-produced identifier or confidence number does not establish either
+  (P5, P6).
+
+## Acceptance probes
+
+The project exists to answer useful buying and analysis questions, not to pass a
+schema review. These probes (from the v2 goal statement and brief; reference
+material, not a schema mandate) exercise the path end to end. They demonstrate
+access; they do not limit the database to a fixed list.
+
+| Probe | Exercises | Covered by |
+|---|---|---|
+| Cheapest N units of spec S available now | decomposition, per-unit or bound prices, identity, live availability | P1, P2, P3, P4 |
+| What did this cost over time | append-only observations, price-kind separation | P3, P5 |
+| What is this lot actually worth | line hierarchy, honest price basis (bounds, never allocated) | P2, P3 |
+| What did we miss | provenance, quarantine and failures as first-class states | P5, P6 |
+
+Production consumer constraints (`TechdealsHandoff/docs/NORTH_STAR.md` G1–G5,
+AG1–AG9) are checks for the later incorporation decision. They are not
+requirements this spike implements.
